@@ -1,14 +1,14 @@
 import { AppShell } from "@/components/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { getRatesData } from "@/lib/db/queries";
 import { formatCurrency } from "@/lib/format";
-import { defaultRates } from "@/lib/pricing/reference-data";
 
-const highlightedFreightRates = defaultRates.freightRates
-  .filter((rate) => rate.freightMode !== "seller_sub79")
-  .slice(0, 6);
+export const dynamic = "force-dynamic";
 
-export default function RatesPage() {
+export default async function RatesPage() {
+  const { freightRates, fullStorageRates } = await getRatesData();
+
   return (
     <AppShell
       currentPath="/admin/rates"
@@ -34,10 +34,10 @@ export default function RatesPage() {
                 </tr>
               </thead>
               <tbody>
-                {highlightedFreightRates.map((rate) => (
-                  <tr key={rate.label} className="border-t border-slate-100 text-slate-700">
-                    <td className="px-5 py-4">{rate.label}</td>
-                    <td className="px-5 py-4">
+              {freightRates.map((rate) => (
+                <tr key={rate.label} className="border-t border-slate-100 text-slate-700">
+                  <td className="px-5 py-4">{rate.label}</td>
+                  <td className="px-5 py-4">
                       <Badge tone={rate.freightMode === "fast" ? "success" : "info"}>{rate.freightMode}</Badge>
                     </td>
                     <td className="px-5 py-4">
@@ -57,7 +57,7 @@ export default function RatesPage() {
             <CardDescription>Daily unit rate pronta para calculo de armazenagem do MVP.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {defaultRates.fullStorageRates.map((rate) => (
+            {fullStorageRates.map((rate) => (
               <div key={rate.sizeCategory} className="rounded-2xl border border-slate-200 p-4">
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-sm font-semibold text-slate-950">{rate.sizeCategory}</p>

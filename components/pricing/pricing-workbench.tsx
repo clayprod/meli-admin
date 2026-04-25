@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AlertTriangle, ArrowRightLeft, BarChart3, Boxes, Calculator, Package } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useForm, useWatch } from "react-hook-form";
 
 import { Badge } from "@/components/ui/badge";
@@ -41,6 +42,10 @@ const defaultValues: PricingFormValues = {
 };
 
 export function PricingWorkbench() {
+  const router = useRouter();
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
   const form = useForm<PricingFormValues>({
     resolver: zodResolver(pricingFormSchema),
     defaultValues,
@@ -62,6 +67,49 @@ export function PricingWorkbench() {
       return null;
     }
   }, [watchedValues]);
+
+  async function handleSaveScenario() {
+    setSaveError(null);
+
+    const isValid = await form.trigger();
+    if (!isValid) {
+      setSaveError("Revise os campos destacados antes de salvar.");
+      return;
+    }
+
+    const values = form.getValues();
+    const parsed = pricingFormSchema.safeParse(values);
+
+    if (!parsed.success) {
+      setSaveError("Nao foi possivel validar o cenario para salvar.");
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      const response = await fetch("/api/pricing/scenarios", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(toPricingInput(parsed.data)),
+      });
+
+      const payload = (await response.json()) as { error?: string; scenarioId?: string };
+
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Falha ao salvar o cenario.");
+      }
+
+      router.push("/scenarios");
+      router.refresh();
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Falha ao salvar o cenario.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
 
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1.08fr)_420px]">
@@ -203,10 +251,11 @@ export function PricingWorkbench() {
           <Button type="button" onClick={() => form.reset(defaultValues)} variant="outline">
             Restaurar caso-base
           </Button>
-          <Button type="button" variant="secondary" disabled>
-            Salvar cenario na proxima etapa
+          <Button type="button" variant="secondary" onClick={handleSaveScenario} disabled={!calculation || isSaving}>
+            {isSaving ? "Salvando..." : "Salvar cenario no banco"}
           </Button>
         </div>
+        {saveError ? <p className="text-sm font-medium text-rose-600">{saveError}</p> : null}
       </form>
 
       <div className="sticky top-4 h-fit self-start">

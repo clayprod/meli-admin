@@ -1,26 +1,14 @@
 import { AppShell } from "@/components/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { getScenariosData } from "@/lib/db/queries";
 import { formatCurrency, formatPercent } from "@/lib/format";
-import { calculatePricing } from "@/lib/pricing/calculate-pricing";
-import { samplePricingInput } from "@/lib/pricing/reference-data";
 
-const scenarios = [
-  samplePricingInput,
-  {
-    ...samplePricingInput,
-    scenario: { ...samplePricingInput.scenario, name: "Conservador", roas: 4.2, targetNetMarginRate: 0.05 },
-  },
-  {
-    ...samplePricingInput,
-    scenario: { ...samplePricingInput.scenario, name: "Agressivo", roas: 3.1, targetNetMarginRate: 0.025 },
-  },
-].map((scenario) => ({
-  name: scenario.scenario.name,
-  result: calculatePricing(scenario),
-}));
+export const dynamic = "force-dynamic";
 
-export default function ScenariosPage() {
+export default async function ScenariosPage() {
+  const scenarios = await getScenariosData();
+
   return (
     <AppShell
       currentPath="/scenarios"
@@ -29,9 +17,9 @@ export default function ScenariosPage() {
     >
       <Card>
         <CardHeader>
-          <CardTitle>Historico inicial de simulacoes</CardTitle>
+          <CardTitle>Historico persistido de simulacoes</CardTitle>
           <CardDescription>
-            A persistencia entra na proxima rodada. Por enquanto, o app ja mostra o formato da tabela e dos indicadores.
+            Toda vez que voce salva um novo calculo, o app registra o cenario, o lote e o resultado final no PostgreSQL.
           </CardDescription>
         </CardHeader>
         <CardContent className="overflow-hidden rounded-3xl border border-slate-200 p-0">
@@ -39,6 +27,7 @@ export default function ScenariosPage() {
             <thead className="bg-slate-50 text-slate-500">
               <tr>
                 <th className="px-5 py-4 font-medium">Cenario</th>
+                <th className="px-5 py-4 font-medium">Produto</th>
                 <th className="px-5 py-4 font-medium">PV</th>
                 <th className="px-5 py-4 font-medium">ROI</th>
                 <th className="px-5 py-4 font-medium">Margem</th>
@@ -46,14 +35,15 @@ export default function ScenariosPage() {
               </tr>
             </thead>
             <tbody>
-              {scenarios.map(({ name, result }) => (
-                <tr key={name} className="border-t border-slate-100 text-slate-700">
-                  <td className="px-5 py-4 font-medium text-slate-950">{name}</td>
-                  <td className="px-5 py-4">{formatCurrency(result.salePrice)}</td>
-                  <td className="px-5 py-4">{formatPercent(result.roi)}</td>
-                  <td className="px-5 py-4">{formatCurrency(result.netMarginUnitAmount)}</td>
+              {scenarios.map((scenario) => (
+                <tr key={scenario.id} className="border-t border-slate-100 text-slate-700">
+                  <td className="px-5 py-4 font-medium text-slate-950">{scenario.name}</td>
+                  <td className="px-5 py-4">{scenario.productName}</td>
+                  <td className="px-5 py-4">{formatCurrency(scenario.salePrice)}</td>
+                  <td className="px-5 py-4">{formatPercent(scenario.roi)}</td>
+                  <td className="px-5 py-4">{formatCurrency(scenario.netMarginUnitAmount)}</td>
                   <td className="px-5 py-4">
-                    <Badge tone={result.freightStatus.tone}>{result.freightStatus.label}</Badge>
+                    <Badge tone={scenario.freightStatus.tone}>{scenario.freightStatus.label}</Badge>
                   </td>
                 </tr>
               ))}

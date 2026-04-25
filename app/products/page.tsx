@@ -1,13 +1,14 @@
 import { AppShell } from "@/components/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { getProductsData } from "@/lib/db/queries";
 import { formatCurrency } from "@/lib/format";
-import { calculatePricing } from "@/lib/pricing/calculate-pricing";
-import { samplePricingInput } from "@/lib/pricing/reference-data";
 
-const snapshot = calculatePricing(samplePricingInput);
+export const dynamic = "force-dynamic";
 
-export default function ProductsPage() {
+export default async function ProductsPage() {
+  const products = await getProductsData();
+
   return (
     <AppShell
       currentPath="/products"
@@ -16,9 +17,9 @@ export default function ProductsPage() {
     >
       <Card>
         <CardHeader>
-          <CardTitle>Produtos seedados para o MVP</CardTitle>
+          <CardTitle>Produtos persistidos no catalogo</CardTitle>
           <CardDescription>
-            Nesta primeira etapa, o app sobe com um produto de referencia para validar layout e calculo.
+            Cada novo calculo salvo cria ou atualiza o produto pelo SKU e registra um novo lote para historico.
           </CardDescription>
         </CardHeader>
         <CardContent className="overflow-hidden rounded-3xl border border-slate-200 p-0">
@@ -34,18 +35,20 @@ export default function ProductsPage() {
               </tr>
             </thead>
             <tbody>
-              <tr className="border-t border-slate-100 text-slate-700">
-                <td className="px-5 py-4 font-medium text-slate-950">{samplePricingInput.product.name}</td>
-                <td className="px-5 py-4">{samplePricingInput.product.sku}</td>
-                <td className="px-5 py-4">{samplePricingInput.product.weightKg} kg</td>
-                <td className="px-5 py-4">
-                  {samplePricingInput.product.lengthCm} x {samplePricingInput.product.widthCm} x {samplePricingInput.product.heightCm} cm
-                </td>
-                <td className="px-5 py-4">{formatCurrency(snapshot.salePrice)}</td>
-                <td className="px-5 py-4">
-                  <Badge tone="success">Ativo no MVP</Badge>
-                </td>
-              </tr>
+              {products.map((product) => (
+                <tr key={product.id} className="border-t border-slate-100 text-slate-700">
+                  <td className="px-5 py-4 font-medium text-slate-950">{product.name}</td>
+                  <td className="px-5 py-4">{product.sku}</td>
+                  <td className="px-5 py-4">{product.weightKg} kg</td>
+                  <td className="px-5 py-4">{product.dimensionsLabel}</td>
+                  <td className="px-5 py-4">{product.salePrice ? formatCurrency(product.salePrice) : "-"}</td>
+                  <td className="px-5 py-4">
+                    <Badge tone={product.active ? "success" : "warning"}>
+                      {product.active ? "Ativo" : "Inativo"}
+                    </Badge>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </CardContent>

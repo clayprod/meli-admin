@@ -5,33 +5,33 @@ import { CostBreakdownChart } from "@/components/dashboard/cost-breakdown-chart"
 import { MetricCard } from "@/components/metric-card";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { getDashboardData } from "@/lib/db/queries";
 import { formatCurrency, formatPercent } from "@/lib/format";
-import { calculatePricing } from "@/lib/pricing/calculate-pricing";
-import { samplePricingInput } from "@/lib/pricing/reference-data";
 
-const snapshot = calculatePricing(samplePricingInput);
+export const dynamic = "force-dynamic";
 
-const breakdown = [
-  {
-    name: "Custo do lote",
-    value: samplePricingInput.purchase.unitCostWithIpi * samplePricingInput.purchase.quantity,
-    color: "#0f172a",
-  },
-  { name: "ST", value: samplePricingInput.purchase.taxSubstitution, color: "#38bdf8" },
-  {
-    name: "Frete total",
-    value: snapshot.freightCost * samplePricingInput.purchase.quantity,
-    color: "#10b981",
-  },
-  {
-    name: "Armazenagem total",
-    value: snapshot.storageCostUnit * samplePricingInput.purchase.quantity,
-    color: "#f59e0b",
-  },
-  { name: "Margem alvo", value: snapshot.netMarginAmount, color: "#8b5cf6" },
-];
+export default async function DashboardPage() {
+  const snapshot = await getDashboardData();
+  const breakdown = [
+    {
+      name: "Custo do lote",
+      value: snapshot.unitCostWithIpi * snapshot.quantity,
+      color: "#0f172a",
+    },
+    { name: "ST", value: snapshot.taxSubstitution, color: "#38bdf8" },
+    {
+      name: "Frete total",
+      value: snapshot.result.freightCost * snapshot.quantity,
+      color: "#10b981",
+    },
+    {
+      name: "Armazenagem total",
+      value: snapshot.result.storageCostUnit * snapshot.quantity,
+      color: "#f59e0b",
+    },
+    { name: "Margem alvo", value: snapshot.result.netMarginAmount, color: "#8b5cf6" },
+  ];
 
-export default function DashboardPage() {
   return (
     <AppShell
       currentPath="/dashboard"
@@ -42,30 +42,30 @@ export default function DashboardPage() {
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <MetricCard
             title="Preco sugerido"
-            value={formatCurrency(snapshot.salePrice)}
-            helper={`Faixa ativa: ${snapshot.selectedBandLabel}`}
+            value={formatCurrency(snapshot.result.salePrice)}
+            helper={`Faixa ativa: ${snapshot.result.selectedBandLabel}`}
             tone="success"
             icon={CircleDollarSign}
           />
           <MetricCard
             title="Margem liquida"
-            value={formatCurrency(snapshot.netMarginAmount)}
+            value={formatCurrency(snapshot.result.netMarginAmount)}
             helper="Margem total estimada para o lote completo"
             tone="info"
             icon={TrendingUp}
           />
           <MetricCard
             title="ROI do lote"
-            value={formatPercent(snapshot.roi)}
-            helper={`ROI anualizado em ${formatPercent(snapshot.annualizedRoi)}`}
-            tone={snapshot.roi >= 0.16 ? "success" : "warning"}
+            value={formatPercent(snapshot.result.roi)}
+            helper={`ROI anualizado em ${formatPercent(snapshot.result.annualizedRoi)}`}
+            tone={snapshot.result.roi >= 0.16 ? "success" : "warning"}
             icon={BarChart3}
           />
           <MetricCard
             title="Status do frete"
-            value={snapshot.freightStatus.label}
-            helper={`Custo atual: ${formatCurrency(snapshot.freightCost)}`}
-            tone={snapshot.freightStatus.tone}
+            value={snapshot.result.freightStatus.label}
+            helper={`Custo atual: ${formatCurrency(snapshot.result.freightCost)}`}
+            tone={snapshot.result.freightStatus.tone}
             icon={Truck}
           />
         </section>
@@ -85,18 +85,19 @@ export default function DashboardPage() {
                 <p className="text-sm font-semibold text-emerald-900">Pronto agora</p>
                 <ul className="mt-3 space-y-2 text-sm leading-6 text-emerald-800">
                   <li>- motor de calculo com base na planilha</li>
-                  <li>- preview local em tempo real</li>
-                  <li>- schema Prisma e seeds iniciais</li>
-                  <li>- shell da aplicacao e paginas principais</li>
+                  <li>- preview local em tempo real com persistencia</li>
+                  <li>- schema Prisma, migrations e seed em PostgreSQL</li>
+                  <li>- dashboard, produtos, cenarios e tarifas lendo do banco</li>
+                  <li>- deploy automatico via GHCR + EasyPanel</li>
                 </ul>
               </div>
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-sm font-semibold text-slate-900">Na proxima etapa</p>
                 <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
-                  <li>- persistir produtos e cenarios</li>
                   <li>- admin completo de tarifas</li>
                   <li>- importacao CSV/Excel e historico</li>
-                  <li>- docker + github actions + ghcr</li>
+                  <li>- autenticacao e times</li>
+                  <li>- fluxo de edicao de cenarios salvos</li>
                 </ul>
               </div>
             </CardContent>
@@ -114,21 +115,19 @@ export default function DashboardPage() {
             <CardContent className="space-y-4 text-sm">
               <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
                 <span className="text-slate-500">Produto</span>
-                <span className="font-semibold text-slate-950">{samplePricingInput.product.name}</span>
+                <span className="font-semibold text-slate-950">{snapshot.productName}</span>
               </div>
               <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
                 <span className="text-slate-500">SKU</span>
-                <span className="font-semibold text-slate-950">{samplePricingInput.product.sku}</span>
+                <span className="font-semibold text-slate-950">{snapshot.productSku}</span>
               </div>
               <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
                 <span className="text-slate-500">Dimensoes</span>
-                <span className="font-semibold text-slate-950">
-                  {samplePricingInput.product.lengthCm} x {samplePricingInput.product.widthCm} x {samplePricingInput.product.heightCm} cm
-                </span>
+                <span className="font-semibold text-slate-950">{snapshot.dimensionsLabel}</span>
               </div>
               <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
                 <span className="text-slate-500">Lote</span>
-                <span className="font-semibold text-slate-950">{samplePricingInput.purchase.quantity} unidades</span>
+                <span className="font-semibold text-slate-950">{snapshot.quantity} unidades</span>
               </div>
             </CardContent>
           </Card>
@@ -139,15 +138,19 @@ export default function DashboardPage() {
               <CardDescription>Resumo financeiro rapido para tomada de decisao de compra e anuncio.</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-2">
-              <InfoRow icon={Package2} label="Custo total" value={formatCurrency(snapshot.costTotal)} />
-              <InfoRow icon={Boxes} label="Armazenagem unit." value={formatCurrency(snapshot.storageCostUnit)} />
-              <InfoRow icon={Truck} label="Frete final" value={formatCurrency(snapshot.freightCost)} />
-              <InfoRow icon={CircleDollarSign} label="Faturamento total" value={formatCurrency(snapshot.revenueTotal)} />
-              <InfoRow icon={BarChart3} label="Investimento ADS" value={formatCurrency(snapshot.adsInvestment)} />
+              <InfoRow
+                icon={Package2}
+                label="Custo total"
+                value={formatCurrency(snapshot.unitCostWithIpi * snapshot.quantity + snapshot.taxSubstitution)}
+              />
+              <InfoRow icon={Boxes} label="Armazenagem unit." value={formatCurrency(snapshot.result.storageCostUnit)} />
+              <InfoRow icon={Truck} label="Frete final" value={formatCurrency(snapshot.result.freightCost)} />
+              <InfoRow icon={CircleDollarSign} label="Faturamento total" value={formatCurrency(snapshot.result.revenueTotal)} />
+              <InfoRow icon={BarChart3} label="Investimento ADS" value={formatCurrency(snapshot.result.adsInvestment)} />
               <div className="rounded-2xl border border-slate-200 p-4">
                 <p className="text-sm font-medium text-slate-500">Alertas</p>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {snapshot.alerts.map((alert) => (
+                  {snapshot.result.alerts.map((alert) => (
                     <Badge key={alert.code} tone={alert.severity === "critical" ? "critical" : alert.severity === "warning" ? "warning" : "info"}>
                       {alert.title}
                     </Badge>

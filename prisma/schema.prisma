@@ -11,7 +11,7 @@ model Product {
   id        String            @id @default(cuid())
   orgId     String?
   name      String
-  sku       String?
+  sku       String?           @unique
   weightKg  Float
   lengthCm  Float
   widthCm   Float
