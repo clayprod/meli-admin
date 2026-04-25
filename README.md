@@ -57,7 +57,31 @@ O projeto ja esta configurado para `PostgreSQL` via `Prisma`.
 Arquivo de ambiente base:
 
 ```env
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/meli_admin?schema=public"
+DATABASE_URL="postgresql://postgres:CHANGE_ME@localhost:5432/tenryu?schema=meli_admin"
+```
+
+### Desenvolvimento local com banco remoto
+
+Para usar o banco principal do servidor sem expor uma nova porta publica, a configuracao local usa um tunel SSH em `127.0.0.1:5433`.
+
+Exemplo:
+
+```bash
+ssh -L 5433:10.0.1.26:5432 root@195.35.40.49 -N
+```
+
+Com o tunel ativo, o `.env` local pode apontar para:
+
+```env
+DATABASE_URL="postgresql://postgres:***@127.0.0.1:5433/tenryu?schema=meli_admin"
+```
+
+### Producao no EasyPanel
+
+No container da app, use o alias interno do swarm:
+
+```env
+DATABASE_URL="postgresql://postgres:***@postgres:5432/tenryu?schema=meli_admin"
 ```
 
 ## Estrutura principal
