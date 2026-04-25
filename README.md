@@ -64,10 +64,12 @@ DATABASE_URL="postgresql://postgres:CHANGE_ME@localhost:5432/tenryu?schema=meli_
 
 Para usar o banco principal do servidor sem expor uma nova porta publica, a configuracao local usa um tunel SSH em `127.0.0.1:5433`.
 
+No servidor existe um proxy local-only em `127.0.0.1:55432` apontando para o service `postgres` da rede do EasyPanel.
+
 Exemplo:
 
 ```bash
-ssh -L 5433:10.0.1.26:5432 root@195.35.40.49 -N
+ssh -L 5433:127.0.0.1:55432 root@195.35.40.49 -N
 ```
 
 Com o tunel ativo, o `.env` local pode apontar para:
