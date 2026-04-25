@@ -1,0 +1,122 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Product {
+  id        String            @id @default(cuid())
+  orgId     String?
+  name      String
+  sku       String?
+  weightKg  Float
+  lengthCm  Float
+  widthCm   Float
+  heightCm  Float
+  active    Boolean           @default(true)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  batches   PurchaseBatch[]
+  scenarios PricingScenario[]
+}
+
+model PurchaseBatch {
+  id                String            @id @default(cuid())
+  productId         String
+  quantity          Int
+  unitCostWithIpi   Float
+  taxSubstitution   Float
+  acquiredAt        DateTime          @default(now())
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  product           Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  scenarios         PricingScenario[]
+}
+
+model PricingScenario {
+  id                        String          @id @default(cuid())
+  productId                 String
+  batchId                   String?
+  name                      String
+  logisticsType             String
+  freightPayer              String
+  commissionRate            Float
+  roas                      Float
+  operationalCostRate       Float
+  simpleTaxRate             Float
+  ownIcmsRate               Float
+  destinationIcmsRate       Float
+  financialCostMonthlyRate  Float
+  targetNetMarginRate       Float
+  turnoverDays              Int
+  createdAt                 DateTime        @default(now())
+  updatedAt                 DateTime        @updatedAt
+  product                   Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  batch                     PurchaseBatch?  @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  results                   PricingResult[]
+}
+
+model PricingResult {
+  id                       String          @id @default(cuid())
+  scenarioId               String
+  salePrice                Float
+  freightCost              Float
+  storageCost              Float
+  finalUnitCost            Float
+  grossMarginRate          Float
+  multiplier               Float
+  netMarginAmount          Float
+  netMarginUnitAmount      Float
+  roi                      Float
+  annualizedRoi            Float
+  revenueTotal             Float
+  adsInvestment            Float
+  statusJson               Json
+  candidateJson            Json
+  ratesEffectiveFrom       DateTime
+  calculatedAt             DateTime        @default(now())
+  scenario                 PricingScenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+}
+
+model FreightRate {
+  id            String    @id @default(cuid())
+  label         String
+  minWeightKg   Float
+  maxWeightKg   Float?
+  priceBandMin  Float
+  priceBandMax  Float?
+  freightCost   Float
+  freightMode   String
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  sourceUrl     String?
+  createdAt     DateTime  @default(now())
+}
+
+model FullStorageRate {
+  id                String    @id @default(cuid())
+  sizeCategory      String
+  maxLengthCm       Float?
+  maxWidthCm        Float?
+  maxHeightCm       Float?
+  maxWeightKg       Float?
+  dailyUnitRate     Float
+  effectiveFrom     DateTime
+  effectiveTo       DateTime?
+  agedStorageLabels Json?
+  createdAt         DateTime  @default(now())
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  entity     String
+  entityId   String
+  action     String
+  beforeJson Json?
+  afterJson  Json?
+  userId     String?
+  createdAt  DateTime @default(now())
+}

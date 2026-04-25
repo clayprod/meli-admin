@@ -1,36 +1,117 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Meli Admin
 
-## Getting Started
+Aplicacao local para administrar precificacao, margem, ROI, ADS e custos de produtos vendidos no Mercado Livre.
 
-First, run the development server:
+## O que ja existe
+
+- motor de calculo em `TypeScript` baseado na planilha `CALCULADORA_MELI.xlsx`
+- preview ao vivo em `/pricing/new`
+- dashboard inicial, catalogo de produtos, cenarios e tela de tarifas
+- schema `Prisma` com seeds iniciais para frete, Full e produto exemplo
+- testes unitarios validando o caso-base da planilha
+
+## Stack
+
+- `Next.js 16` + `TypeScript`
+- `Tailwind CSS 4`
+- `React Hook Form` + `Zod`
+- `Prisma`
+- `Vitest`
+
+## Rodando localmente
+
+1. Instale dependencias:
+
+```bash
+npm install
+```
+
+2. Suba o ambiente local:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+3. Abra:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```text
+http://localhost:3000
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Scripts uteis
 
-## Learn More
+```bash
+npm run dev
+npm run lint
+npm run typecheck
+npm run test
+npm run build
+npm run db:generate
+npm run db:seed
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Banco de dados
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+O projeto ja esta configurado para `PostgreSQL` via `Prisma`.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Arquivo de ambiente base:
 
-## Deploy on Vercel
+```env
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/meli_admin?schema=public"
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Estrutura principal
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `app/` rotas do dashboard, precificador e admin
+- `components/` UI e shell da aplicacao
+- `lib/pricing/` motor de calculo, schemas e dados iniciais
+- `prisma/` schema e seed
+- `tests/` regressao do calculo
+
+## Proximas etapas
+
+- persistir produtos, cenarios e resultados no banco
+- criar CRUD real para admin de tarifas
+- adicionar Dockerfile e GitHub Actions para publicar imagem no GHCR
+- conectar deploy via EasyPanel
+
+## CI/CD no GitHub Actions
+
+O repositório ja vem com dois workflows:
+
+- `CI`: roda `lint`, `typecheck`, `test` e `build`
+- `CD`: builda a imagem Docker e publica no `ghcr.io`
+
+### Secrets no GitHub
+
+Obrigatorio para o fluxo atual:
+
+- `EASYPANEL_DEPLOY_HOOK` -> webhook do App Service no Easypanel para forcar um redeploy apos publicar uma nova imagem
+
+Observacoes:
+
+- o publish no `GHCR` usa o `GITHUB_TOKEN` nativo do Actions; nao precisa criar secret extra para isso
+- se o pacote do GHCR ficar privado, o pull no EasyPanel vai precisar de credenciais do GitHub Packages no proprio EasyPanel
+
+### Tags publicadas no GHCR
+
+As imagens saem com:
+
+- `ghcr.io/clayprod/meli-admin:latest`
+- `ghcr.io/clayprod/meli-admin:sha-<commit>`
+- `ghcr.io/clayprod/meli-admin:main`
+
+### EasyPanel
+
+No `App Service` do EasyPanel, use:
+
+- Source: `Docker image`
+- Image: `ghcr.io/clayprod/meli-admin:latest`
+- Port: `3000`
+- Deploy Hook: copie a URL e coloque em `EASYPANEL_DEPLOY_HOOK`
+
+Se a imagem estiver privada no GHCR, configure tambem no EasyPanel:
+
+- Registry server: `ghcr.io`
+- Registry username: seu usuario GitHub
+- Registry password: PAT com permissao de packages
