@@ -63,10 +63,14 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     needs: docker
-    if: ${{ secrets.EASYPANEL_DEPLOY_HOOK != '' }}
+    env:
+      EASYPANEL_DEPLOY_HOOK: ${{ secrets.EASYPANEL_DEPLOY_HOOK }}
     steps:
       - name: Trigger EasyPanel deploy hook
-        env:
-          EASYPANEL_DEPLOY_HOOK: ${{ secrets.EASYPANEL_DEPLOY_HOOK }}
         run: |
+          if [ -z "$EASYPANEL_DEPLOY_HOOK" ]; then
+            echo "EASYPANEL_DEPLOY_HOOK not configured, skipping remote deploy trigger."
+            exit 0
+          fi
+
           curl --fail --show-error --silent -X POST "$EASYPANEL_DEPLOY_HOOK"
