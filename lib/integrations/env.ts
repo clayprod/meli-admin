@@ -23,6 +23,8 @@ export function getMercadoPagoConfig() {
     clientId: readEnv("MERCADOPAGO_CLIENT_ID"),
     clientSecret: readEnv("MERCADOPAGO_CLIENT_SECRET"),
     redirectUri: readEnv("MERCADOPAGO_REDIRECT_URI"),
+    accessToken: readEnv("MERCADOPAGO_ACCESS_TOKEN"),
+    publicKey: readEnv("MERCADOPAGO_PUBLIC_KEY"),
   };
 }
 
@@ -34,6 +36,7 @@ export function getIntegrationEnvStatus() {
     publicAppUrl: Boolean(getPublicAppUrl()),
     integrationSecret: Boolean(getIntegrationSecret()),
     mercadoLivre: Boolean(meli.clientId && meli.clientSecret && meli.redirectUri),
-    mercadoPago: Boolean(mp.clientId && mp.clientSecret && mp.redirectUri),
+    mercadoPago: Boolean((mp.clientId && mp.clientSecret && mp.redirectUri) || mp.accessToken),
+    mercadoPagoDirectToken: Boolean(mp.accessToken),
   };
 }

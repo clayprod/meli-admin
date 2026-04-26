@@ -67,6 +67,8 @@ MELI_REDIRECT_URI="http://localhost:3000/api/integrations/mercadolivre/callback"
 MERCADOPAGO_CLIENT_ID=""
 MERCADOPAGO_CLIENT_SECRET=""
 MERCADOPAGO_REDIRECT_URI="http://localhost:3000/api/integrations/mercadopago/callback"
+MERCADOPAGO_PUBLIC_KEY=""
+MERCADOPAGO_ACCESS_TOKEN=""
 ```
 
 ### Desenvolvimento local com banco remoto
@@ -110,7 +112,7 @@ O app agora suporta a espinha dorsal para:
 
 - OAuth do `Mercado Livre`
 - sync de `listings`, fotos, video, promocoes e Product Ads
-- OAuth do `Mercado Pago`
+- OAuth do `Mercado Pago` ou token direto da conta
 - sync de pagamentos, fees e valor liquido
 - webhooks em `/api/webhooks/mercadolivre` e `/api/webhooks/mercadopago`
 

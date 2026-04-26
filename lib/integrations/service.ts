@@ -7,6 +7,7 @@ import {
 
 import { prisma as db } from "@/lib/db/prisma";
 import { decryptSecret, encryptSecret } from "@/lib/integrations/crypto";
+import { getMercadoPagoConfig } from "@/lib/integrations/env";
 import {
   exchangeMercadoLivreCode,
   getMercadoLivreItemAdMetrics,
@@ -146,6 +147,29 @@ export async function connectMercadoPagoAccount(code: string) {
     scopes: token.scope ?? null,
     tokenExpiresAt: mapTokenExpiry(token.expires_in),
     metadataJson: metadata,
+  });
+}
+
+async function ensureDirectMercadoPagoConnection() {
+  const config = getMercadoPagoConfig();
+
+  if (!config.accessToken) {
+    return null;
+  }
+
+  return upsertConnection({
+    provider: IntegrationProvider.MERCADO_PAGO,
+    externalUserId: "env-direct",
+    accountLabel: "Mercado Pago direto (token)",
+    accessToken: config.accessToken,
+    refreshToken: null,
+    tokenType: "Bearer",
+    scopes: "direct_access",
+    tokenExpiresAt: null,
+    metadataJson: {
+      mode: "direct_access_token",
+      public_key: config.publicKey || null,
+    },
   });
 }
 
@@ -537,10 +561,12 @@ function inferListingLink(externalReference: string | null, itemLookup: Map<stri
 }
 
 export async function syncMercadoPagoPayments(days = 30) {
-  const connection = await getPrimaryConnection(IntegrationProvider.MERCADO_PAGO);
+  const connection =
+    (await getPrimaryConnection(IntegrationProvider.MERCADO_PAGO)) ??
+    (await ensureDirectMercadoPagoConnection());
 
   if (!connection) {
-    throw new Error("Conecte uma conta do Mercado Pago antes de sincronizar pagamentos.");
+    throw new Error("Configure um access token ou conecte uma conta do Mercado Pago antes de sincronizar pagamentos.");
   }
 
   try {

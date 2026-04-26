@@ -34,14 +34,15 @@ export default async function IntegrationsPage() {
             <CardHeader>
               <CardTitle>Checklist de ambiente</CardTitle>
               <CardDescription>
-                O app ja suporta OAuth real. Falta apenas preencher as credenciais oficiais da sua app no `.env`/EasyPanel.
+                O app suporta OAuth real e, no caso do Mercado Pago, tambem modo direto via access token da conta.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
               <EnvRow label="PUBLIC_APP_URL" ok={overview.envStatus.publicAppUrl} />
               <EnvRow label="INTEGRATIONS_SECRET" ok={overview.envStatus.integrationSecret} />
               <EnvRow label="Mercado Livre OAuth" ok={overview.envStatus.mercadoLivre} />
-              <EnvRow label="Mercado Pago OAuth" ok={overview.envStatus.mercadoPago} />
+              <EnvRow label="Mercado Pago (OAuth ou token)" ok={overview.envStatus.mercadoPago} />
+              <EnvRow label="Mercado Pago token direto" ok={overview.envStatus.mercadoPagoDirectToken} />
             </CardContent>
           </Card>
 
@@ -66,7 +67,7 @@ export default async function IntegrationsPage() {
               />
               <ProviderCard
                 title="Mercado Pago"
-                description="Pagamentos, fees, net received, chargebacks e conciliacao."
+                description="Pagamentos, fees, net received, chargebacks e conciliacao. Pode funcionar por OAuth ou access token direto."
                 connections={mpConnections}
                 connectHref="/api/integrations/mercadopago/connect"
                 syncButtons={[
