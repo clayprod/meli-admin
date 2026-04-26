@@ -562,8 +562,8 @@ function inferListingLink(externalReference: string | null, itemLookup: Map<stri
 
 export async function syncMercadoPagoPayments(days = 30) {
   const connection =
-    (await getPrimaryConnection(IntegrationProvider.MERCADO_PAGO)) ??
-    (await ensureDirectMercadoPagoConnection());
+    (await ensureDirectMercadoPagoConnection()) ??
+    (await getPrimaryConnection(IntegrationProvider.MERCADO_PAGO));
 
   if (!connection) {
     throw new Error("Configure um access token ou conecte uma conta do Mercado Pago antes de sincronizar pagamentos.");
