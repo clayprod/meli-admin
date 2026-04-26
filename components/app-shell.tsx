@@ -1,5 +1,8 @@
+"use client";
+
 import Link from "next/link";
-import { BarChart3, Boxes, Calculator, ClipboardList, Megaphone, Package2, PlugZap, ReceiptText, Store } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { BarChart3, Boxes, Calculator, ClipboardList, LogOut, Megaphone, Package2, PlugZap, ReceiptText, Store } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,6 +29,14 @@ type AppShellProps = {
 };
 
 export function AppShell({ currentPath, title, description, children }: AppShellProps) {
+  const router = useRouter();
+
+  async function handleLogout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/login");
+    router.refresh();
+  }
+
   return (
     <div className="relative min-h-screen bg-[color:var(--background)] text-slate-950">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.18),_transparent_28%),radial-gradient(circle_at_top_right,_rgba(16,185,129,0.14),_transparent_24%),linear-gradient(180deg,_rgba(255,255,255,0.94),_rgba(248,250,252,0.98))]" />
@@ -66,11 +77,20 @@ export function AppShell({ currentPath, title, description, children }: AppShell
             })}
           </nav>
 
-          <div className="mt-auto rounded-3xl border border-white/10 bg-white/5 p-5">
-            <p className="text-sm font-medium text-white">Proximo passo</p>
-            <p className="mt-2 text-sm leading-6 text-slate-300">
-              Conectar contas do Mercado Livre e Mercado Pago, sincronizar listings reais, promocoes, ads e conciliacao financeira.
-            </p>
+          <div className="mt-auto space-y-3">
+            <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
+              <p className="text-sm font-medium text-white">Proximo passo</p>
+              <p className="mt-2 text-sm leading-6 text-slate-300">
+                Conectar contas do Mercado Livre e Mercado Pago, sincronizar listings reais, promocoes, ads e conciliacao financeira.
+              </p>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium text-slate-400 transition hover:bg-white/8 hover:text-white"
+            >
+              <LogOut className="size-4" />
+              Sair
+            </button>
           </div>
         </aside>
 
