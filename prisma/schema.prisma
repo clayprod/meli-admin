@@ -7,20 +7,34 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum IntegrationProvider {
+  MERCADO_LIVRE
+  MERCADO_PAGO
+}
+
+enum ConnectionStatus {
+  ACTIVE
+  EXPIRED
+  ERROR
+  DISCONNECTED
+}
+
 model Product {
-  id        String            @id @default(cuid())
-  orgId     String?
-  name      String
-  sku       String?           @unique
-  weightKg  Float
-  lengthCm  Float
-  widthCm   Float
-  heightCm  Float
-  active    Boolean           @default(true)
-  createdAt DateTime          @default(now())
-  updatedAt DateTime          @updatedAt
-  batches   PurchaseBatch[]
-  scenarios PricingScenario[]
+  id               String              @id @default(cuid())
+  orgId            String?
+  name             String
+  sku              String?             @unique
+  weightKg         Float
+  lengthCm         Float
+  widthCm          Float
+  heightCm         Float
+  active           Boolean             @default(true)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  batches          PurchaseBatch[]
+  scenarios        PricingScenario[]
+  marketplaceLinks MarketplaceListing[]
+  payments         FinancialPayment[]
 }
 
 model PurchaseBatch {
@@ -79,6 +93,191 @@ model PricingResult {
   ratesEffectiveFrom       DateTime
   calculatedAt             DateTime        @default(now())
   scenario                 PricingScenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+}
+
+model IntegrationConnection {
+  id                String              @id @default(cuid())
+  provider          IntegrationProvider
+  status            ConnectionStatus    @default(ACTIVE)
+  accountLabel      String
+  externalUserId    String
+  siteId            String?
+  advertiserId      String?
+  collectorId       String?
+  scopes            String?
+  tokenType         String?
+  accessTokenEnc    String
+  refreshTokenEnc   String?
+  tokenExpiresAt    DateTime?
+  metadataJson      Json?
+  lastSyncedAt      DateTime?
+  lastSyncStatus    String?
+  lastSyncError     String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  listings          MarketplaceListing[]
+  promotions        ListingPromotion[]
+  adMetrics         ListingAdMetric[]
+  payments          FinancialPayment[]
+  webhookEvents     IntegrationWebhookEvent[]
+
+  @@unique([provider, externalUserId])
+}
+
+model MarketplaceListing {
+  id                  String                @id @default(cuid())
+  connectionId        String
+  productId           String?
+  itemId              String                @unique
+  siteId              String
+  sellerId            String
+  title               String
+  status              String
+  condition           String?
+  domainId            String?
+  categoryId          String?
+  currencyId          String?
+  listingTypeId       String?
+  logisticType        String?
+  officialStoreId     String?
+  catalogListing      Boolean               @default(false)
+  acceptsMercadoPago  Boolean               @default(true)
+  price               Float
+  originalPrice       Float?
+  availableQuantity   Int?
+  soldQuantity        Int?
+  thumbnail           String?
+  permalink           String?
+  videoId             String?
+  picturesJson        Json?
+  attributesJson      Json?
+  shippingJson        Json?
+  variationsJson      Json?
+  tagsJson            Json?
+  rawJson             Json?
+  lastSyncedAt        DateTime?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  connection          IntegrationConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  product             Product?              @relation(fields: [productId], references: [id], onDelete: SetNull)
+  promotions          ListingPromotion[]
+  adMetrics           ListingAdMetric[]
+  payments            FinancialPayment[]
+
+  @@index([connectionId, status])
+  @@index([productId])
+}
+
+model ListingPromotion {
+  id                 String                @id @default(cuid())
+  connectionId       String
+  listingId          String
+  promotionId        String
+  promotionType      String
+  subType            String?
+  status             String
+  name               String?
+  dealPrice          Float?
+  originalPrice      Float?
+  fixedPercentage    Float?
+  fixedAmount        Float?
+  sellerPercentage   Float?
+  meliPercentage     Float?
+  startDate          DateTime?
+  finishDate         DateTime?
+  rawJson            Json?
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+  connection         IntegrationConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  listing            MarketplaceListing    @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@unique([listingId, promotionId])
+  @@index([connectionId, promotionType])
+}
+
+model ListingAdMetric {
+  id                   String                @id @default(cuid())
+  connectionId         String
+  listingId            String
+  metricDate           DateTime
+  campaignId           String                @default("")
+  clicks               Int?
+  prints               Int?
+  ctr                  Float?
+  cost                 Float?
+  cpc                  Float?
+  acos                 Float?
+  roas                 Float?
+  cvr                  Float?
+  sov                  Float?
+  directAmount         Float?
+  indirectAmount       Float?
+  totalAmount          Float?
+  unitsQuantity        Int?
+  directUnitsQuantity  Int?
+  indirectUnitsQuantity Int?
+  advertisingItemsQuantity Int?
+  organicUnitsQuantity Int?
+  organicUnitsAmount   Float?
+  rawJson              Json?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  connection           IntegrationConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  listing              MarketplaceListing    @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@unique([listingId, metricDate, campaignId])
+  @@index([connectionId, metricDate])
+}
+
+model FinancialPayment {
+  id                   String                @id @default(cuid())
+  connectionId         String
+  listingId            String?
+  productId            String?
+  paymentId            String                @unique
+  externalReference    String?
+  merchantOrderId      String?
+  marketplaceOrderId   String?
+  status               String
+  statusDetail         String?
+  paymentMethodId      String?
+  paymentTypeId        String?
+  currencyId           String?
+  transactionAmount    Float
+  totalPaidAmount      Float?
+  netReceivedAmount    Float?
+  shippingAmount       Float?
+  marketplaceFeeAmount Float?
+  mercadopagoFeeAmount Float?
+  approvedAt           DateTime?
+  paymentCreatedAt     DateTime?
+  paymentUpdatedAt     DateTime?
+  rawJson              Json?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  connection           IntegrationConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  listing              MarketplaceListing?   @relation(fields: [listingId], references: [id], onDelete: SetNull)
+  product              Product?              @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([connectionId, paymentCreatedAt])
+  @@index([listingId])
+  @@index([productId])
+}
+
+model IntegrationWebhookEvent {
+  id                String                @id @default(cuid())
+  connectionId      String?
+  provider          IntegrationProvider
+  topic             String
+  resource          String?
+  externalEventId   String?
+  payloadJson       Json
+  processedAt       DateTime?
+  createdAt         DateTime              @default(now())
+  connection        IntegrationConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+
+  @@index([provider, topic])
+  @@index([externalEventId])
 }
 
 model FreightRate {

@@ -9,6 +9,7 @@ Aplicacao local para administrar precificacao, margem, ROI, ADS e custos de prod
 - dashboard inicial, catalogo de produtos, cenarios e tela de tarifas
 - schema `Prisma` com seeds iniciais para frete, Full e produto exemplo
 - testes unitarios validando o caso-base da planilha
+- integracoes preparadas para Mercado Livre, Product Ads, promocoes e Mercado Pago
 
 ## Stack
 
@@ -58,6 +59,14 @@ Arquivo de ambiente base:
 
 ```env
 DATABASE_URL="postgresql://postgres:CHANGE_ME@localhost:5432/tenryu?schema=meli_admin"
+PUBLIC_APP_URL="http://localhost:3000"
+INTEGRATIONS_SECRET="change-this-before-using-oauth"
+MELI_CLIENT_ID=""
+MELI_CLIENT_SECRET=""
+MELI_REDIRECT_URI="http://localhost:3000/api/integrations/mercadolivre/callback"
+MERCADOPAGO_CLIENT_ID=""
+MERCADOPAGO_CLIENT_SECRET=""
+MERCADOPAGO_REDIRECT_URI="http://localhost:3000/api/integrations/mercadopago/callback"
 ```
 
 ### Desenvolvimento local com banco remoto
@@ -91,8 +100,27 @@ DATABASE_URL="postgresql://postgres:***@postgres:5432/tenryu?schema=meli_admin"
 - `app/` rotas do dashboard, precificador e admin
 - `components/` UI e shell da aplicacao
 - `lib/pricing/` motor de calculo, schemas e dados iniciais
+- `lib/integrations/` clientes OAuth, sync e webhooks de Mercado Livre e Mercado Pago
 - `prisma/` schema e seed
 - `tests/` regressao do calculo
+
+## Integracoes externas
+
+O app agora suporta a espinha dorsal para:
+
+- OAuth do `Mercado Livre`
+- sync de `listings`, fotos, video, promocoes e Product Ads
+- OAuth do `Mercado Pago`
+- sync de pagamentos, fees e valor liquido
+- webhooks em `/api/webhooks/mercadolivre` e `/api/webhooks/mercadopago`
+
+### Rotas novas da interface
+
+- `/integrations`
+- `/listings`
+- `/promotions`
+- `/advertising`
+- `/finance`
 
 ## Proximas etapas
 

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BarChart3, Boxes, Calculator, ClipboardList, Package2 } from "lucide-react";
+import { BarChart3, Boxes, Calculator, ClipboardList, Megaphone, Package2, PlugZap, ReceiptText, Store } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,11 @@ const navigation = [
   { href: "/dashboard", label: "Dashboard", icon: BarChart3 },
   { href: "/pricing/new", label: "Precificar", icon: Calculator },
   { href: "/products", label: "Produtos", icon: Package2 },
+  { href: "/integrations", label: "Integracoes", icon: PlugZap },
+  { href: "/listings", label: "Listings", icon: Store },
+  { href: "/promotions", label: "Promocoes", icon: ClipboardList },
+  { href: "/advertising", label: "Ads", icon: Megaphone },
+  { href: "/finance", label: "Financeiro", icon: ReceiptText },
   { href: "/scenarios", label: "Cenarios", icon: ClipboardList },
   { href: "/admin/rates", label: "Tarifas", icon: Boxes },
 ];
@@ -64,7 +69,7 @@ export function AppShell({ currentPath, title, description, children }: AppShell
           <div className="mt-auto rounded-3xl border border-white/10 bg-white/5 p-5">
             <p className="text-sm font-medium text-white">Proximo passo</p>
             <p className="mt-2 text-sm leading-6 text-slate-300">
-              Persistir produtos, cenarios e resultados com Prisma + PostgreSQL e preparar o container.
+              Conectar contas do Mercado Livre e Mercado Pago, sincronizar listings reais, promocoes, ads e conciliacao financeira.
             </p>
           </div>
         </aside>
