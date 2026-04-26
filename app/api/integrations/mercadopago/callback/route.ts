@@ -3,8 +3,15 @@ import { NextResponse } from "next/server";
 
 import { connectMercadoPagoAccount } from "@/lib/integrations/service";
 
+function getOrigin(request: Request): string {
+  const host = request.headers.get("host") ?? "localhost:3000";
+  const proto = request.headers.get("x-forwarded-proto") ?? "http";
+  return `${proto}://${host}`;
+}
+
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
+  const { searchParams } = new URL(request.url);
+  const origin = getOrigin(request);
   const code = searchParams.get("code");
   const state = searchParams.get("state");
   const error = searchParams.get("error");
