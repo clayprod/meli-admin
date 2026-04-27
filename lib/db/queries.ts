@@ -9,6 +9,13 @@ import { hasDatabaseUrl, prisma } from "./prisma";
 type ResultStatusPayload = {
   freightStatus?: PricingResultDraft["freightStatus"];
   alerts?: PricingAlert[];
+  scenarioContext?: {
+    listingType?: string;
+    fulfillmentMode?: string;
+    marketplaceShippingCost?: number;
+    marketplaceShippingRebate?: number;
+    ownDeliveryCost?: number;
+  };
 };
 
 type DashboardScenarioRecord = Prisma.PricingScenarioGetPayload<{
@@ -54,6 +61,18 @@ function readStatusPayload(input: unknown): ResultStatusPayload {
   }
 
   return input as ResultStatusPayload;
+}
+
+function resolveFreightResponsibility(input: PricingInput) {
+  if (input.scenario.marketplaceShippingRebate > 0 && input.scenario.ownDeliveryCost > 0) {
+    return "HIBRIDO";
+  }
+
+  if (input.scenario.ownDeliveryCost > 0 || input.scenario.marketplaceShippingCost > 0) {
+    return "VENDEDOR";
+  }
+
+  return "PLATAFORMA";
 }
 
 function buildFallbackRecord() {
@@ -209,6 +228,8 @@ export async function getScenariosData() {
         name: samplePricingInput.scenario.name,
         productName: samplePricingInput.product.name,
         createdAt: new Date().toISOString(),
+        listingType: samplePricingInput.scenario.listingType,
+        fulfillmentMode: samplePricingInput.scenario.fulfillmentMode,
         salePrice: result.salePrice,
         roi: result.roi,
         netMarginUnitAmount: result.netMarginUnitAmount,
@@ -240,6 +261,11 @@ export async function getScenariosData() {
         name: scenario.name,
         productName: scenario.product.name,
         createdAt: scenario.createdAt.toISOString(),
+        listingType:
+          statusPayload.scenarioContext?.listingType ??
+          (scenario.commissionRate >= 0.16 ? "PREMIUM" : "CLASSICO"),
+        fulfillmentMode:
+          statusPayload.scenarioContext?.fulfillmentMode ?? scenario.logisticsType,
         salePrice: latestResult?.salePrice ?? 0,
         roi: latestResult?.roi ?? 0,
         netMarginUnitAmount: latestResult?.netMarginUnitAmount ?? 0,
@@ -257,6 +283,8 @@ export async function getScenariosData() {
         name: samplePricingInput.scenario.name,
         productName: samplePricingInput.product.name,
         createdAt: new Date().toISOString(),
+        listingType: samplePricingInput.scenario.listingType,
+        fulfillmentMode: samplePricingInput.scenario.fulfillmentMode,
         salePrice: result.salePrice,
         roi: result.roi,
         netMarginUnitAmount: result.netMarginUnitAmount,
@@ -359,8 +387,8 @@ export async function savePricingScenario(input: PricingInput) {
         productId: product.id,
         batchId: batch.id,
         name: input.scenario.name,
-        logisticsType: input.scenario.logisticsType,
-        freightPayer: input.scenario.freightPayer,
+        logisticsType: input.scenario.fulfillmentMode,
+        freightPayer: resolveFreightResponsibility(input),
         commissionRate: input.scenario.commissionRate,
         roas: input.scenario.roas,
         operationalCostRate: input.scenario.operationalCostRate,
@@ -391,6 +419,13 @@ export async function savePricingScenario(input: PricingInput) {
         statusJson: {
           freightStatus: result.freightStatus,
           alerts: result.alerts,
+          scenarioContext: {
+            listingType: input.scenario.listingType,
+            fulfillmentMode: input.scenario.fulfillmentMode,
+            marketplaceShippingCost: input.scenario.marketplaceShippingCost,
+            marketplaceShippingRebate: input.scenario.marketplaceShippingRebate,
+            ownDeliveryCost: input.scenario.ownDeliveryCost,
+          },
         },
         candidateJson: result.candidateResults,
         ratesEffectiveFrom: new Date(result.ratesEffectiveFrom),

@@ -8,6 +8,7 @@ const tones = {
   warning: "bg-amber-50 text-amber-700 ring-amber-200",
   critical: "bg-rose-50 text-rose-700 ring-rose-200",
   info: "bg-sky-50 text-sky-700 ring-sky-200",
+  orange: "bg-orange-50 text-orange-700 ring-orange-200",
 } as const;
 
 type BadgeProps = HTMLAttributes<HTMLDivElement> & {

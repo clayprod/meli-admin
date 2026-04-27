@@ -21,9 +21,12 @@ const baseSchema = z.object({
 export const pricingInputSchema = baseSchema.extend({
   scenario: z.object({
     name: z.string().min(2, "Dê um nome ao cenario."),
-    logisticsType: z.enum(["FULL", "CLASSICO"]),
-    freightPayer: z.enum(["CLIENTE", "MINHA"]),
+    listingType: z.enum(["CLASSICO", "PREMIUM"]),
+    fulfillmentMode: z.enum(["FULL", "FLEX", "PROPRIA"]),
     commissionRate: z.number().min(0).max(0.99),
+    marketplaceShippingCost: z.number().min(0).max(9999),
+    marketplaceShippingRebate: z.number().min(0).max(9999),
+    ownDeliveryCost: z.number().min(0).max(9999),
     roas: z.number().positive("ROAS precisa ser maior que zero."),
     operationalCostRate: z.number().min(0).max(0.99),
     simpleTaxRate: z.number().min(0).max(0.99),
@@ -32,15 +35,19 @@ export const pricingInputSchema = baseSchema.extend({
     financialCostMonthlyRate: z.number().min(0).max(0.99),
     targetNetMarginRate: z.number().min(0).max(0.99),
     turnoverDays: z.number().positive("Giro precisa ser maior que zero."),
+    targetSalePrice: z.number().nonnegative().optional(),
   }),
 });
 
 export const pricingFormSchema = baseSchema.extend({
   scenario: z.object({
     name: z.string().min(2, "Dê um nome ao cenario."),
-    logisticsType: z.enum(["FULL", "CLASSICO"]),
-    freightPayer: z.enum(["CLIENTE", "MINHA"]),
+    listingType: z.enum(["CLASSICO", "PREMIUM"]),
+    fulfillmentMode: z.enum(["FULL", "FLEX", "PROPRIA"]),
     commissionRate: z.number().min(0).max(99),
+    marketplaceShippingCost: z.number().min(0).max(9999),
+    marketplaceShippingRebate: z.number().min(0).max(9999),
+    ownDeliveryCost: z.number().min(0).max(9999),
     roas: z.number().positive("ROAS precisa ser maior que zero."),
     operationalCostRate: z.number().min(0).max(99),
     simpleTaxRate: z.number().min(0).max(99),
@@ -49,6 +56,7 @@ export const pricingFormSchema = baseSchema.extend({
     financialCostMonthlyRate: z.number().min(0).max(99),
     targetNetMarginRate: z.number().min(0).max(99),
     turnoverDays: z.number().positive("Giro precisa ser maior que zero."),
+    targetSalePrice: z.number().nonnegative().optional(),
   }),
 });
 

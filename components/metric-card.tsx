@@ -1,17 +1,26 @@
+import { TrendingDown, TrendingUp } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
+
+type Trend = {
+  label: string;
+  direction: "up" | "down" | "neutral";
+};
 
 type MetricCardProps = {
   title: string;
   value: string;
   helper: string;
-  tone?: "neutral" | "success" | "warning" | "critical" | "info";
+  trend?: Trend;
+  tone?: "neutral" | "success" | "warning" | "critical" | "info" | "orange";
   icon: LucideIcon;
 };
 
-export function MetricCard({ title, value, helper, tone = "neutral", icon: Icon }: MetricCardProps) {
+export function MetricCard({ title, value, helper, trend, tone = "neutral", icon: Icon }: MetricCardProps) {
+  const iconBg = tone === "orange" || tone === "neutral" ? "bg-orange-50 text-orange-600" : tone === "success" ? "bg-emerald-50 text-emerald-600" : tone === "warning" ? "bg-amber-50 text-amber-600" : tone === "critical" ? "bg-rose-50 text-rose-600" : "bg-sky-50 text-sky-600";
+
   return (
     <Card className="overflow-hidden">
       <CardHeader className="flex-row items-start justify-between gap-3 pb-3">
@@ -19,13 +28,24 @@ export function MetricCard({ title, value, helper, tone = "neutral", icon: Icon 
           <CardDescription>{title}</CardDescription>
           <CardTitle className="mt-3 text-3xl">{value}</CardTitle>
         </div>
-        <div className="rounded-2xl bg-slate-100 p-3 text-slate-700">
+        <div className={cn("rounded-2xl p-3", iconBg)}>
           <Icon className="size-5" />
         </div>
       </CardHeader>
       <CardContent className="flex items-center justify-between gap-3">
         <p className="text-sm leading-6 text-slate-500">{helper}</p>
-        <Badge tone={tone}>{tone === "success" ? "Bom" : tone === "warning" ? "Atencao" : tone === "critical" ? "Risco" : "Info"}</Badge>
+        {trend ? (
+          <span
+            className={cn(
+              "inline-flex items-center gap-1 text-xs font-medium",
+              trend.direction === "up" ? "text-emerald-600" : trend.direction === "down" ? "text-rose-600" : "text-slate-500",
+            )}
+          >
+            {trend.direction === "up" && <TrendingUp className="size-3" />}
+            {trend.direction === "down" && <TrendingDown className="size-3" />}
+            {trend.label}
+          </span>
+        ) : null}
       </CardContent>
     </Card>
   );

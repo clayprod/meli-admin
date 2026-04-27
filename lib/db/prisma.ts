@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 
 declare global {
   var __prisma__: PrismaClient | undefined;
@@ -6,6 +6,18 @@ declare global {
 
 export function hasDatabaseUrl() {
   return Boolean(process.env.DATABASE_URL);
+}
+
+export function isDatabaseConnectionError(error: unknown) {
+  if (error instanceof Prisma.PrismaClientInitializationError) {
+    return true;
+  }
+
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P1001") {
+    return true;
+  }
+
+  return error instanceof Error && error.message.includes("Can't reach database server");
 }
 
 export const prisma =

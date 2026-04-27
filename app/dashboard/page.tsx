@@ -1,190 +1,158 @@
-import { BarChart3, Boxes, CircleDollarSign, Package2, TrendingUp, Truck } from "lucide-react";
+import { BarChart3, CircleDollarSign, ReceiptText, Store, TrendingUp } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
-import { CostBreakdownChart } from "@/components/dashboard/cost-breakdown-chart";
+import { RevenueChart } from "@/components/dashboard/revenue-chart";
 import { MetricCard } from "@/components/metric-card";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { getDashboardData } from "@/lib/db/queries";
-import { formatCurrency, formatPercent } from "@/lib/format";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { getSession } from "@/lib/auth/session";
+import { getFinanceDashboardData } from "@/lib/db/integration-queries";
+import { formatCurrency } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
+const statusTone: Record<string, "success" | "warning" | "critical" | "info" | "neutral"> = {
+  approved: "success",
+  pending: "warning",
+  rejected: "critical",
+  cancelled: "critical",
+  in_process: "info",
+  refunded: "neutral",
+  charged_back: "critical",
+};
+
 export default async function DashboardPage() {
-  const snapshot = await getDashboardData();
-  const breakdown = [
-    {
-      name: "Custo do lote",
-      value: snapshot.unitCostWithIpi * snapshot.quantity,
-      color: "#0f172a",
-    },
-    { name: "ST", value: snapshot.taxSubstitution, color: "#38bdf8" },
-    {
-      name: "Frete total",
-      value: snapshot.result.freightCost * snapshot.quantity,
-      color: "#10b981",
-    },
-    {
-      name: "Armazenagem total",
-      value: snapshot.result.storageCostUnit * snapshot.quantity,
-      color: "#f59e0b",
-    },
-    { name: "Margem alvo", value: snapshot.result.netMarginAmount, color: "#8b5cf6" },
-  ];
+  const [session, data] = await Promise.all([getSession(), getFinanceDashboardData()]);
+
+  const last = data.weeklySeries.at(-1);
+  const prev = data.weeklySeries.at(-2);
+
+  function trend(current: number | undefined, previous: number | undefined) {
+    if (!current || !previous || previous === 0) return undefined;
+    const pct = ((current - previous) / previous) * 100;
+    const sign = pct >= 0 ? "+" : "";
+    return {
+      label: `${sign}${pct.toFixed(1)}% vs. semana anterior`,
+      direction: pct >= 0 ? ("up" as const) : ("down" as const),
+    };
+  }
 
   return (
     <AppShell
       currentPath="/dashboard"
-      title="Dashboard operacional"
-      description="Visao rapida do caso-base ja convertido da planilha, com indicadores de PV, ROI, ads e status de frete."
+      title="Dashboard"
+      description="Receita, pagamentos e performance dos seus produtos no Mercado Livre."
+      userEmail={session?.email}
     >
       <div className="grid gap-6">
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {/* KPI cards */}
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <MetricCard
-            title="Preco sugerido"
-            value={formatCurrency(snapshot.result.salePrice)}
-            helper={`Faixa ativa: ${snapshot.result.selectedBandLabel}`}
-            tone="success"
+            title="GMV (últimas 12 sem.)"
+            value={formatCurrency(data.totals.gmv)}
+            helper="Valor bruto transacionado"
+            tone="orange"
             icon={CircleDollarSign}
+            trend={trend(last?.gmv, prev?.gmv)}
           />
           <MetricCard
-            title="Margem liquida"
-            value={formatCurrency(snapshot.result.netMarginAmount)}
-            helper="Margem total estimada para o lote completo"
-            tone="info"
+            title="Líquido recebido"
+            value={formatCurrency(data.totals.net)}
+            helper="Após taxas do Mercado Pago"
+            tone="success"
             icon={TrendingUp}
+            trend={trend(last?.net, prev?.net)}
           />
           <MetricCard
-            title="ROI do lote"
-            value={formatPercent(snapshot.result.roi)}
-            helper={`ROI anualizado em ${formatPercent(snapshot.result.annualizedRoi)}`}
-            tone={snapshot.result.roi >= 0.16 ? "success" : "warning"}
-            icon={BarChart3}
+            title="Taxas marketplace"
+            value={formatCurrency(data.totals.marketplaceFees)}
+            helper="Comissão ML cobrada nos pagamentos"
+            tone="warning"
+            icon={ReceiptText}
           />
           <MetricCard
-            title="Status do frete"
-            value={snapshot.result.freightStatus.label}
-            helper={`Custo atual: ${formatCurrency(snapshot.result.freightCost)}`}
-            tone={snapshot.result.freightStatus.tone}
-            icon={Truck}
+            title="Listings ativos"
+            value={String(data.totals.activeListings)}
+            helper="Anúncios com status ativo no ML"
+            tone="info"
+            icon={Store}
+            trend={undefined}
           />
         </section>
 
-        <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-          <CostBreakdownChart data={breakdown} />
+        {/* Chart + Top listings */}
+        <section className="grid gap-6 xl:grid-cols-[1fr_320px]">
+          <RevenueChart data={data.weeklySeries} />
 
           <Card>
             <CardHeader>
-              <CardTitle>Radar do MVP</CardTitle>
-              <CardDescription>
-                O que ja esta pronto nesta primeira entrega local e o que entra na proxima rodada.
-              </CardDescription>
+              <CardTitle className="flex items-center gap-2">
+                <BarChart3 className="size-4 text-orange-500" />
+                Top 5 por receita
+              </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4">
-                <p className="text-sm font-semibold text-emerald-900">Pronto agora</p>
-                <ul className="mt-3 space-y-2 text-sm leading-6 text-emerald-800">
-                  <li>- motor de calculo com base na planilha</li>
-                  <li>- preview local em tempo real com persistencia</li>
-                  <li>- schema Prisma, migrations e seed em PostgreSQL</li>
-                  <li>- dashboard, produtos, cenarios e tarifas lendo do banco</li>
-                  <li>- deploy automatico via GHCR + EasyPanel</li>
-                </ul>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm font-semibold text-slate-900">Na proxima etapa</p>
-                <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
-                  <li>- admin completo de tarifas</li>
-                  <li>- importacao CSV/Excel e historico</li>
-                  <li>- autenticacao e times</li>
-                  <li>- fluxo de edicao de cenarios salvos</li>
-                </ul>
-              </div>
+            <CardContent className="space-y-0">
+              {data.topListings.length === 0 ? (
+                <p className="text-sm text-slate-400">Sem dados ainda. Sincronize os pagamentos.</p>
+              ) : (
+                data.topListings.map((listing, i) => (
+                  <div key={listing.itemId} className="flex items-center justify-between border-b border-slate-50 py-3 last:border-0">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="text-sm font-bold text-slate-300 w-5 shrink-0">{i + 1}</span>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-slate-900">{listing.title}</p>
+                        <p className="text-xs text-slate-400">{listing.paymentCount} pgtos</p>
+                      </div>
+                    </div>
+                    <span className="ml-3 shrink-0 text-sm font-semibold text-slate-900">{formatCurrency(listing.revenue)}</span>
+                  </div>
+                ))
+              )}
             </CardContent>
           </Card>
         </section>
 
-        <section className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-          <Card>
-            <CardHeader>
-              <CardTitle>Produto de referencia</CardTitle>
-              <CardDescription>
-                Caso-base usado para validar a fidelidade do calculo contra a planilha original.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4 text-sm">
-              <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
-                <span className="text-slate-500">Produto</span>
-                <span className="font-semibold text-slate-950">{snapshot.productName}</span>
-              </div>
-              <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
-                <span className="text-slate-500">SKU</span>
-                <span className="font-semibold text-slate-950">{snapshot.productSku}</span>
-              </div>
-              <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
-                <span className="text-slate-500">Dimensoes</span>
-                <span className="font-semibold text-slate-950">{snapshot.dimensionsLabel}</span>
-              </div>
-              <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
-                <span className="text-slate-500">Lote</span>
-                <span className="font-semibold text-slate-950">{snapshot.quantity} unidades</span>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Indicadores do lote</CardTitle>
-              <CardDescription>Resumo financeiro rapido para tomada de decisao de compra e anuncio.</CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4 md:grid-cols-2">
-              <InfoRow
-                icon={Package2}
-                label="Custo total"
-                value={formatCurrency(snapshot.unitCostWithIpi * snapshot.quantity + snapshot.taxSubstitution)}
-              />
-              <InfoRow icon={Boxes} label="Armazenagem unit." value={formatCurrency(snapshot.result.storageCostUnit)} />
-              <InfoRow icon={Truck} label="Frete final" value={formatCurrency(snapshot.result.freightCost)} />
-              <InfoRow icon={CircleDollarSign} label="Faturamento total" value={formatCurrency(snapshot.result.revenueTotal)} />
-              <InfoRow icon={BarChart3} label="Investimento ADS" value={formatCurrency(snapshot.result.adsInvestment)} />
-              <div className="rounded-2xl border border-slate-200 p-4">
-                <p className="text-sm font-medium text-slate-500">Alertas</p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {snapshot.result.alerts.map((alert) => (
-                    <Badge key={alert.code} tone={alert.severity === "critical" ? "critical" : alert.severity === "warning" ? "warning" : "info"}>
-                      {alert.title}
-                    </Badge>
+        {/* Recent payments */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Pagamentos recentes</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            {data.recentPayments.length === 0 ? (
+              <p className="px-6 pb-6 text-sm text-slate-400">Nenhum pagamento encontrado. Sincronize o Mercado Pago.</p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100 text-left">
+                    <th className="px-6 py-3 font-medium text-slate-500">ID</th>
+                    <th className="px-4 py-3 font-medium text-slate-500">Anúncio</th>
+                    <th className="px-4 py-3 text-right font-medium text-slate-500">Bruto</th>
+                    <th className="px-4 py-3 text-right font-medium text-slate-500">Líquido</th>
+                    <th className="px-4 py-3 font-medium text-slate-500">Status</th>
+                    <th className="px-6 py-3 font-medium text-slate-500">Data</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.recentPayments.map((p) => (
+                    <tr key={p.paymentId} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50">
+                      <td className="px-6 py-3 font-mono text-xs text-slate-400">{p.paymentId}</td>
+                      <td className="max-w-[200px] truncate px-4 py-3 text-slate-700">{p.listingTitle ?? "—"}</td>
+                      <td className="px-4 py-3 text-right font-medium text-slate-900">{formatCurrency(p.transactionAmount)}</td>
+                      <td className="px-4 py-3 text-right text-slate-600">{p.netReceivedAmount != null ? formatCurrency(p.netReceivedAmount) : "—"}</td>
+                      <td className="px-4 py-3">
+                        <Badge tone={statusTone[p.status] ?? "neutral"}>{p.status}</Badge>
+                      </td>
+                      <td className="px-6 py-3 text-slate-400">
+                        {p.approvedAt ? new Date(p.approvedAt).toLocaleDateString("pt-BR") : "—"}
+                      </td>
+                    </tr>
                   ))}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </section>
+                </tbody>
+              </table>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </AppShell>
-  );
-}
-
-function InfoRow({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: typeof Package2;
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="rounded-2xl border border-slate-200 p-4">
-      <div className="flex items-center gap-3">
-        <div className="rounded-2xl bg-slate-100 p-3 text-slate-700">
-          <Icon className="size-4" />
-        </div>
-        <div>
-          <p className="text-sm font-medium text-slate-500">{label}</p>
-          <p className="mt-1 text-lg font-semibold text-slate-950">{value}</p>
-        </div>
-      </div>
-    </div>
   );
 }

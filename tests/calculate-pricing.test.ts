@@ -12,7 +12,7 @@ describe("calculatePricing", () => {
     expect(result.revenueTotal).toBeCloseTo(7704.7265, 2);
     expect(result.roi).toBeCloseTo(0.1649, 3);
     expect(result.annualizedRoi).toBeCloseTo(1.5311, 3);
-    expect(result.selectedBandLabel).toBe("R$ 19 a R$ 48,99");
+    expect(result.selectedBandLabel).toBe("Full · Classico");
   });
 
   it("zera armazenagem quando nao e Full", () => {
@@ -20,36 +20,43 @@ describe("calculatePricing", () => {
       ...samplePricingInput,
       scenario: {
         ...samplePricingInput.scenario,
-        logisticsType: "CLASSICO",
+        fulfillmentMode: "FLEX",
       },
     });
 
     expect(result.storageCostUnit).toBe(0);
   });
 
-  it("usa frete seller_sub79 quando o frete fica por conta da operacao", () => {
+  it("combina repasse do ML com custo proprio no Flex", () => {
     const result = calculatePricing({
       ...samplePricingInput,
       scenario: {
         ...samplePricingInput.scenario,
-        freightPayer: "MINHA",
+        fulfillmentMode: "FLEX",
+        marketplaceShippingCost: 0,
+        marketplaceShippingRebate: 4,
+        ownDeliveryCost: 12,
       },
     });
 
-    expect(result.freightCost).toBeCloseTo(12.35, 2);
-    expect(result.selectedBandLabel).toBe("R$ 19 a R$ 48,99");
+    expect(result.freightCost).toBeCloseTo(8, 2);
+    expect(result.selectedBandLabel).toBe("Flex · Classico");
   });
 
-  it("mantem a faixa final quando nenhum PV cai dentro das anteriores", () => {
+  it("permite logistica propria com custo manual", () => {
     const result = calculatePricing({
       ...samplePricingInput,
-      purchase: {
-        ...samplePricingInput.purchase,
-        unitCostWithIpi: 90,
+      scenario: {
+        ...samplePricingInput.scenario,
+        fulfillmentMode: "PROPRIA",
+        marketplaceShippingCost: 0,
+        marketplaceShippingRebate: 0,
+        ownDeliveryCost: 18.4,
       },
     });
 
-    expect(result.selectedBandLabel).toBe("A partir de R$ 200");
+    expect(result.freightCost).toBeCloseTo(18.4, 2);
+    expect(result.selectedBandLabel).toBe("Logistica propria · Classico");
   });
 
   it("falha com denominador invalido", () => {

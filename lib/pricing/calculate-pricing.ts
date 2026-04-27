@@ -1,15 +1,8 @@
-import {
-  defaultRates,
-  priceBands,
-  samplePricingInput,
-} from "@/lib/pricing/reference-data";
+import { defaultRates, priceBands, samplePricingInput } from "@/lib/pricing/reference-data";
 import type {
   FreightCandidate,
-  FreightPayer,
-  FreightRate,
   FreightStatus,
   FullStorageRate,
-  PriceBand,
   PricingAlert,
   PricingInput,
   PricingRates,
@@ -23,32 +16,16 @@ function assertPositive(value: number, label: string) {
   }
 }
 
+function assertNonNegative(value: number, label: string) {
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error(`${label} nao pode ser negativo.`);
+  }
+}
+
 function assertRate(value: number, label: string) {
   if (!Number.isFinite(value) || value < 0 || value >= 1) {
     throw new Error(`${label} precisa ficar entre 0 e 1.`);
   }
-}
-
-function getWeightBand(weightKg: number, freightRates: FreightRate[]) {
-  const weightBands = Array.from(
-    new Map(
-      freightRates.map((rate) => [
-        `${rate.minWeightKg}-${rate.maxWeightKg ?? "plus"}`,
-        {
-          minWeightKg: rate.minWeightKg,
-          maxWeightKg: rate.maxWeightKg,
-        },
-      ]),
-    ).values(),
-  ).sort((left, right) => left.minWeightKg - right.minWeightKg);
-
-  return weightBands.reduce((selected, current) => {
-    if (weightKg >= current.minWeightKg) {
-      return current;
-    }
-
-    return selected;
-  }, weightBands[0]);
 }
 
 function classifyProductSize(
@@ -82,62 +59,73 @@ function getStorageRate(sizeCategory: SizeCategory, rates: FullStorageRate[]) {
   return rate;
 }
 
-function getFreightCostForBand(
-  payer: FreightPayer,
-  weightKg: number,
-  band: PriceBand,
-  rates: FreightRate[],
-) {
-  const weightBand = getWeightBand(weightKg, rates);
-  const bandMode =
-    payer === "MINHA" && band.max !== null && band.max <= 78.99
-      ? "seller_sub79"
-      : band.mode;
-
-  const rate = rates.find(
-    (entry) =>
-      entry.freightMode === bandMode &&
-      entry.minWeightKg === weightBand.minWeightKg &&
-      entry.priceBandMin === (bandMode === "seller_sub79" ? 0 : band.min),
-  );
-
-  if (!rate) {
-    throw new Error("Nao foi possivel localizar a tarifa de frete para a faixa escolhida.");
+function getStorageCostUnit(input: PricingInput, rates: PricingRates, sizeCategory: SizeCategory) {
+  if (input.scenario.fulfillmentMode !== "FULL") {
+    return 0;
   }
 
-  return rate.freightCost;
+  const storageRate = getStorageRate(sizeCategory, rates.fullStorageRates);
+  return storageRate.dailyUnitRate * (input.scenario.turnoverDays / 2);
 }
 
-function getFreightStatus(salePrice: number, freightPayer: FreightPayer): FreightStatus {
-  if (salePrice > 19 && salePrice < 79 && freightPayer !== "MINHA") {
+function getNetFreightCost(input: PricingInput) {
+  return (
+    input.scenario.marketplaceShippingCost +
+    input.scenario.ownDeliveryCost -
+    input.scenario.marketplaceShippingRebate
+  );
+}
+
+function getScenarioLabel(input: PricingInput) {
+  const fulfillmentLabel =
+    input.scenario.fulfillmentMode === "FULL"
+      ? "Full"
+      : input.scenario.fulfillmentMode === "FLEX"
+        ? "Flex"
+        : "Logistica propria";
+  const listingLabel = input.scenario.listingType === "PREMIUM" ? "Premium" : "Classico";
+
+  return `${fulfillmentLabel} · ${listingLabel}`;
+}
+
+function getFreightStatus(input: PricingInput): FreightStatus {
+  if (input.scenario.fulfillmentMode === "FULL") {
     return {
-      code: "FRETE_GRATIS_PADRAO",
-      label: "Frete gratis padrao",
+      code: "FULL_MERCADO_LIVRE",
+      label: "Full Mercado Livre",
       tone: "success",
     };
   }
 
-  if (salePrice <= 19 && freightPayer !== "MINHA") {
+  if (input.scenario.fulfillmentMode === "FLEX") {
     return {
-      code: "FRETE_PAGO_CLIENTE",
-      label: "Frete pago pelo cliente",
-      tone: "neutral",
-    };
-  }
-
-  if (salePrice > 79 && freightPayer === "MINHA") {
-    return {
-      code: "MUDAR_PARA_CLIENTE",
-      label: "Avaliar frete por conta do cliente",
-      tone: "warning",
+      code: input.scenario.marketplaceShippingRebate > 0 ? "FLEX_COM_REPASSE" : "FLEX_SEM_REPASSE",
+      label:
+        input.scenario.marketplaceShippingRebate > 0
+          ? "Flex com repasse ML"
+          : "Flex sem repasse ML",
+      tone: input.scenario.marketplaceShippingRebate > 0 ? "success" : "warning",
     };
   }
 
   return {
-    code: "FRETE_GRATIS_RAPIDO",
-    label: "Frete gratis rapido",
-    tone: "success",
+    code: "LOGISTICA_PROPRIA",
+    label: "Logistica propria",
+    tone: "neutral",
   };
+}
+
+function buildCandidateResults(input: PricingInput, salePrice: number, freightCost: number): FreightCandidate[] {
+  return [
+    {
+      bandLabel: getScenarioLabel(input),
+      priceBandMin: salePrice,
+      priceBandMax: salePrice,
+      freightCost,
+      salePrice,
+      inBand: true,
+    },
+  ];
 }
 
 function buildAlerts(result: PricingResultDraft, input: PricingInput): PricingAlert[] {
@@ -154,19 +142,32 @@ function buildAlerts(result: PricingResultDraft, input: PricingInput): PricingAl
 
   if (input.scenario.targetNetMarginRate < 0.05) {
     alerts.push({
-      code: "LOW_MARGIN",
+      code: "LOW_MARGIN_TARGET",
       severity: "warning",
       title: "Margem alvo agressiva",
       description: "A margem liquida configurada esta abaixo de 5%.",
     });
   }
 
-  if (result.freightStatus.code === "MUDAR_PARA_CLIENTE") {
+  if (
+    input.scenario.fulfillmentMode === "FLEX" &&
+    input.scenario.ownDeliveryCost > 0 &&
+    input.scenario.marketplaceShippingRebate < input.scenario.ownDeliveryCost
+  ) {
     alerts.push({
-      code: "FREIGHT_MISMATCH",
+      code: "FLEX_REBATE_GAP",
+      severity: "warning",
+      title: "Repasse do Flex abaixo do custo proprio",
+      description: "O valor devolvido pelo Mercado Livre nao cobre toda a sua entrega.",
+    });
+  }
+
+  if (result.netMarginUnitAmount < 0) {
+    alerts.push({
+      code: "NEGATIVE_MARGIN",
       severity: "critical",
-      title: "Frete desalinhado",
-      description: "Com este preco, vale revisar o responsavel pelo frete para proteger a margem.",
+      title: "Margem negativa",
+      description: "O cenario calculado perde dinheiro por unidade vendida.",
     });
   }
 
@@ -182,10 +183,7 @@ function buildAlerts(result: PricingResultDraft, input: PricingInput): PricingAl
   return alerts;
 }
 
-export function calculatePricing(
-  input: PricingInput,
-  rates: PricingRates = defaultRates,
-): PricingResultDraft {
+function validatePricingInput(input: PricingInput) {
   assertPositive(input.product.weightKg, "Peso");
   assertPositive(input.product.lengthCm, "Comprimento");
   assertPositive(input.product.widthCm, "Largura");
@@ -199,11 +197,16 @@ export function calculatePricing(
   assertRate(input.scenario.ownIcmsRate, "ICMS proprio");
   assertRate(input.scenario.destinationIcmsRate, "ICMS destino");
   assertRate(input.scenario.financialCostMonthlyRate, "Custo financeiro mensal");
-  assertRate(input.scenario.targetNetMarginRate, "Margem liquida alvo");
+  assertNonNegative(input.scenario.marketplaceShippingCost, "Custo de frete da plataforma");
+  assertNonNegative(input.scenario.marketplaceShippingRebate, "Repasse de frete da plataforma");
+  assertNonNegative(input.scenario.ownDeliveryCost, "Custo proprio de entrega");
+}
+
+function buildPricingContext(input: PricingInput, rates: PricingRates) {
+  validatePricingInput(input);
 
   const costTotal =
-    input.purchase.unitCostWithIpi * input.purchase.quantity +
-    input.purchase.taxSubstitution;
+    input.purchase.unitCostWithIpi * input.purchase.quantity + input.purchase.taxSubstitution;
   const finalUnitCost = costTotal / input.purchase.quantity;
   const sizeCategory = classifyProductSize(
     input.product.lengthCm,
@@ -211,20 +214,42 @@ export function calculatePricing(
     input.product.heightCm,
     input.product.weightKg,
   );
-
-  const storageRate = getStorageRate(sizeCategory, rates.fullStorageRates);
-  const storageCostUnit =
-    input.scenario.logisticsType === "FULL"
-      ? ((input.purchase.quantity / 2) * storageRate.dailyUnitRate * input.scenario.turnoverDays) /
-        input.purchase.quantity
-      : 0;
-
+  const storageCostUnit = getStorageCostUnit(input, rates, sizeCategory);
+  const freightCost = getNetFreightCost(input);
   const adsRate = 1 / input.scenario.roas;
   const difalRate = input.scenario.destinationIcmsRate - input.scenario.ownIcmsRate;
   const financialRateForTurnover =
-    (1 + input.scenario.financialCostMonthlyRate) **
-      (input.scenario.turnoverDays / 30) -
-    1;
+    (1 + input.scenario.financialCostMonthlyRate) ** (input.scenario.turnoverDays / 30) - 1;
+
+  return {
+    costTotal,
+    finalUnitCost,
+    sizeCategory,
+    storageCostUnit,
+    freightCost,
+    adsRate,
+    difalRate,
+    financialRateForTurnover,
+  };
+}
+
+export function calculatePricing(
+  input: PricingInput,
+  rates: PricingRates = defaultRates,
+): PricingResultDraft {
+  assertRate(input.scenario.targetNetMarginRate, "Margem liquida alvo");
+
+  const {
+    costTotal,
+    finalUnitCost,
+    sizeCategory,
+    storageCostUnit,
+    freightCost,
+    adsRate,
+    difalRate,
+    financialRateForTurnover,
+  } = buildPricingContext(input, rates);
+
   const denominator =
     1 -
     (input.scenario.commissionRate +
@@ -236,51 +261,32 @@ export function calculatePricing(
       financialRateForTurnover);
 
   if (denominator <= 0) {
-    throw new Error(
-      "As taxas configuradas deixam o denominador do preco menor ou igual a zero.",
-    );
+    throw new Error("As taxas configuradas deixam o denominador do preco menor ou igual a zero.");
   }
 
-  const candidateResults: FreightCandidate[] = rates.priceBands.map((band) => {
-    const freightCost = getFreightCostForBand(
-      input.scenario.freightPayer,
-      input.product.weightKg,
-      band,
-      rates.freightRates,
-    );
-    const salePrice = (finalUnitCost + freightCost + storageCostUnit) / denominator;
-    const inBand =
-      salePrice >= band.min && (band.max === null ? true : salePrice <= band.max);
-
-    return {
-      bandLabel: band.label,
-      priceBandMin: band.min,
-      priceBandMax: band.max,
-      freightCost,
-      salePrice,
-      inBand,
-    };
-  });
-
-  const selectedCandidate =
-    candidateResults.find((candidate) => candidate.inBand) ??
-    candidateResults[candidateResults.length - 1];
-  const salePrice = selectedCandidate.salePrice;
+  const salePrice = (finalUnitCost + freightCost + storageCostUnit) / denominator;
   const revenueTotal = salePrice * input.purchase.quantity;
   const adsInvestment = revenueTotal * adsRate;
-  const netMarginAmount = salePrice * input.scenario.targetNetMarginRate * input.purchase.quantity;
   const netMarginUnitAmount = salePrice * input.scenario.targetNetMarginRate;
+  const netMarginAmount = netMarginUnitAmount * input.purchase.quantity;
   const roi = netMarginAmount / costTotal;
   const annualizedRoi = (1 + roi) ** (365 / input.scenario.turnoverDays) - 1;
+  const candidateResults = buildCandidateResults(input, salePrice, freightCost);
+
   const result: PricingResultDraft = {
     costTotal,
     finalUnitCost,
     sizeCategory,
     storageCostUnit,
-    freightCost: selectedCandidate.freightCost,
+    listingType: input.scenario.listingType,
+    fulfillmentMode: input.scenario.fulfillmentMode,
+    marketplaceShippingCost: input.scenario.marketplaceShippingCost,
+    marketplaceShippingRebate: input.scenario.marketplaceShippingRebate,
+    ownDeliveryCost: input.scenario.ownDeliveryCost,
+    freightCost,
     salePrice,
-    grossMarginRate: (salePrice - input.purchase.unitCostWithIpi) / salePrice,
-    multiplier: salePrice / input.purchase.unitCostWithIpi,
+    grossMarginRate: salePrice === 0 ? 0 : (salePrice - finalUnitCost - freightCost - storageCostUnit) / salePrice,
+    multiplier: finalUnitCost === 0 ? 0 : salePrice / finalUnitCost,
     difalRate,
     adsRate,
     adsInvestment,
@@ -291,14 +297,108 @@ export function calculatePricing(
     roi,
     annualizedRoi,
     revenueTotal,
-    freightStatus: getFreightStatus(salePrice, input.scenario.freightPayer),
+    freightStatus: getFreightStatus(input),
     alerts: [],
     candidateResults,
-    selectedBandLabel: selectedCandidate.bandLabel,
+    selectedBandLabel: candidateResults[0].bandLabel,
     ratesEffectiveFrom: rates.effectiveFrom,
   };
 
   result.alerts = buildAlerts(result, input);
+  return result;
+}
+
+export function calculatePricingFromPrice(
+  input: PricingInput,
+  rates: PricingRates = defaultRates,
+): PricingResultDraft {
+  const targetSalePrice = input.scenario.targetSalePrice;
+  if (!targetSalePrice || targetSalePrice <= 0) {
+    throw new Error("Preco de venda alvo precisa ser maior que zero.");
+  }
+
+  const {
+    costTotal,
+    finalUnitCost,
+    sizeCategory,
+    storageCostUnit,
+    freightCost,
+    adsRate,
+    difalRate,
+    financialRateForTurnover,
+  } = buildPricingContext(input, rates);
+
+  const denominatorWithoutMargin =
+    1 -
+    (input.scenario.commissionRate +
+      adsRate +
+      input.scenario.simpleTaxRate +
+      input.scenario.operationalCostRate +
+      difalRate +
+      financialRateForTurnover);
+
+  const resultingNetMarginRate =
+    denominatorWithoutMargin - (finalUnitCost + freightCost + storageCostUnit) / targetSalePrice;
+  const revenueTotal = targetSalePrice * input.purchase.quantity;
+  const adsInvestment = revenueTotal * adsRate;
+  const netMarginUnitAmount = targetSalePrice * resultingNetMarginRate;
+  const netMarginAmount = netMarginUnitAmount * input.purchase.quantity;
+  const roi = netMarginAmount / costTotal;
+  const annualizedRoi = (1 + roi) ** (365 / input.scenario.turnoverDays) - 1;
+  const candidateResults = buildCandidateResults(input, targetSalePrice, freightCost);
+
+  const result: PricingResultDraft = {
+    costTotal,
+    finalUnitCost,
+    sizeCategory,
+    storageCostUnit,
+    listingType: input.scenario.listingType,
+    fulfillmentMode: input.scenario.fulfillmentMode,
+    marketplaceShippingCost: input.scenario.marketplaceShippingCost,
+    marketplaceShippingRebate: input.scenario.marketplaceShippingRebate,
+    ownDeliveryCost: input.scenario.ownDeliveryCost,
+    freightCost,
+    salePrice: targetSalePrice,
+    grossMarginRate:
+      targetSalePrice === 0
+        ? 0
+        : (targetSalePrice - finalUnitCost - freightCost - storageCostUnit) / targetSalePrice,
+    multiplier: finalUnitCost === 0 ? 0 : targetSalePrice / finalUnitCost,
+    difalRate,
+    adsRate,
+    adsInvestment,
+    denominator: denominatorWithoutMargin,
+    financialRateForTurnover,
+    netMarginAmount,
+    netMarginUnitAmount,
+    roi,
+    annualizedRoi,
+    revenueTotal,
+    freightStatus: getFreightStatus(input),
+    alerts: [],
+    candidateResults,
+    selectedBandLabel: candidateResults[0].bandLabel,
+    ratesEffectiveFrom: rates.effectiveFrom,
+    resultingNetMarginRate,
+  };
+
+  if (resultingNetMarginRate < 0) {
+    result.alerts.push({
+      code: "LOW_MARGIN",
+      severity: "critical",
+      title: "Preco abaixo do custo",
+      description: "Com este preco, as despesas superam a receita. A margem resultante e negativa.",
+    });
+  } else if (resultingNetMarginRate < 0.05) {
+    result.alerts.push({
+      code: "LOW_MARGIN",
+      severity: "warning",
+      title: "Margem resultante agressiva",
+      description: "A margem calculada para este preco esta abaixo de 5%.",
+    });
+  }
+
+  result.alerts.push(...buildAlerts(result, input));
 
   return result;
 }

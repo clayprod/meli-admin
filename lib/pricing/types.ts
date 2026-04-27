@@ -1,5 +1,5 @@
-export type LogisticsType = "FULL" | "CLASSICO";
-export type FreightPayer = "CLIENTE" | "MINHA";
+export type ListingType = "CLASSICO" | "PREMIUM";
+export type FulfillmentMode = "FULL" | "FLEX" | "PROPRIA";
 export type FreightMode = "standard" | "fast" | "seller_sub79";
 export type SizeCategory = "PEQUENO" | "MEDIO" | "GRANDE" | "EXTRAGRANDE";
 
@@ -20,9 +20,12 @@ export type PurchaseDetails = {
 
 export type PricingScenarioInput = {
   name: string;
-  logisticsType: LogisticsType;
-  freightPayer: FreightPayer;
+  listingType: ListingType;
+  fulfillmentMode: FulfillmentMode;
   commissionRate: number;
+  marketplaceShippingCost: number;
+  marketplaceShippingRebate: number;
+  ownDeliveryCost: number;
   roas: number;
   operationalCostRate: number;
   simpleTaxRate: number;
@@ -31,6 +34,7 @@ export type PricingScenarioInput = {
   financialCostMonthlyRate: number;
   targetNetMarginRate: number;
   turnoverDays: number;
+  targetSalePrice?: number;
 };
 
 export type PricingInput = {
@@ -103,6 +107,11 @@ export type PricingResultDraft = {
   finalUnitCost: number;
   sizeCategory: SizeCategory;
   storageCostUnit: number;
+  listingType: ListingType;
+  fulfillmentMode: FulfillmentMode;
+  marketplaceShippingCost: number;
+  marketplaceShippingRebate: number;
+  ownDeliveryCost: number;
   freightCost: number;
   salePrice: number;
   grossMarginRate: number;
@@ -122,4 +131,5 @@ export type PricingResultDraft = {
   candidateResults: FreightCandidate[];
   selectedBandLabel: string;
   ratesEffectiveFrom: string;
+  resultingNetMarginRate?: number;
 };

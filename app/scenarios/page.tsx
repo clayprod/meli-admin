@@ -28,6 +28,8 @@ export default async function ScenariosPage() {
               <tr>
                 <th className="px-5 py-4 font-medium">Cenario</th>
                 <th className="px-5 py-4 font-medium">Produto</th>
+                <th className="px-5 py-4 font-medium">Anuncio</th>
+                <th className="px-5 py-4 font-medium">Logistica</th>
                 <th className="px-5 py-4 font-medium">PV</th>
                 <th className="px-5 py-4 font-medium">ROI</th>
                 <th className="px-5 py-4 font-medium">Margem</th>
@@ -39,6 +41,12 @@ export default async function ScenariosPage() {
                 <tr key={scenario.id} className="border-t border-slate-100 text-slate-700">
                   <td className="px-5 py-4 font-medium text-slate-950">{scenario.name}</td>
                   <td className="px-5 py-4">{scenario.productName}</td>
+                  <td className="px-5 py-4">
+                    <Badge tone="info">{scenario.listingType}</Badge>
+                  </td>
+                  <td className="px-5 py-4">
+                    <Badge tone="neutral">{scenario.fulfillmentMode}</Badge>
+                  </td>
                   <td className="px-5 py-4">{formatCurrency(scenario.salePrice)}</td>
                   <td className="px-5 py-4">{formatPercent(scenario.roi)}</td>
                   <td className="px-5 py-4">{formatCurrency(scenario.netMarginUnitAmount)}</td>

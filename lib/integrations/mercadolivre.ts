@@ -9,7 +9,18 @@ type TokenResponse = {
   user_id?: number | string;
 };
 
-function buildUrl(path: string, query?: Record<string, string | number | boolean | undefined>) {
+type QueryValue = string | number | boolean | undefined;
+
+type ListingPriceResponse = {
+  listing_type_id?: string;
+  listing_type_name?: string;
+  sale_fee_amount?: number;
+  listing_fee_amount?: number;
+  free_relist?: boolean;
+  stop_time?: string;
+};
+
+function buildUrl(path: string, query?: Record<string, QueryValue>) {
   const url = new URL(path, "https://api.mercadolibre.com");
 
   Object.entries(query ?? {}).forEach(([key, value]) => {
@@ -103,6 +114,106 @@ export async function mercadoLivreRequest<T>(path: string, accessToken: string, 
   return parseJsonResponse<T>(response);
 }
 
+export async function getMercadoLivreCategoryPrediction(siteId: string, query: string) {
+  const url = new URL(`https://api.mercadolibre.com/sites/${siteId}/domain_discovery/search`);
+  url.searchParams.set("limit", "1");
+  url.searchParams.set("q", query);
+
+  const response = await fetch(url, { headers: { accept: "application/json" }, cache: "no-store" });
+  return parseJsonResponse<
+    Array<{
+      category_id?: string;
+      category_name?: string;
+      domain_id?: string;
+      domain_name?: string;
+    }>
+  >(response);
+}
+
+export async function getMercadoLivreListingPrices(
+  siteId: string,
+  options: { price: number; categoryId?: string; listingTypeId?: string },
+) {
+  const url = new URL(`https://api.mercadolibre.com/sites/${siteId}/listing_prices`);
+  url.searchParams.set("price", String(options.price));
+  if (options.categoryId) url.searchParams.set("category_id", options.categoryId);
+  if (options.listingTypeId) url.searchParams.set("listing_type_id", options.listingTypeId);
+
+  const response = await fetch(url, { headers: { accept: "application/json" }, cache: "no-store" });
+  return parseJsonResponse<ListingPriceResponse[]>(response);
+}
+
+export async function getMercadoLivreSellerShippingCost(
+  accessToken: string,
+  userId: string,
+  options: {
+    itemId?: string;
+    dimensions?: string;
+    itemPrice: number;
+    listingTypeId: string;
+    mode: string;
+    logisticType: string;
+    condition?: string;
+    categoryId?: string;
+    currencyId?: string;
+    verbose?: boolean;
+  },
+) {
+  return mercadoLivreRequest<{
+    coverage?: {
+      all_country?: {
+        list_cost?: number;
+        currency_id?: string;
+        billable_weight?: number;
+        discount?: {
+          rate?: number;
+          type?: string;
+          promoted_amount?: number;
+        };
+      };
+    };
+  }>(`/users/${userId}/shipping_options/free`, accessToken, {
+    item_id: options.itemId,
+    dimensions: options.dimensions,
+    item_price: options.itemPrice,
+    listing_type_id: options.listingTypeId,
+    mode: options.mode,
+    logistic_type: options.logisticType,
+    condition: options.condition ?? "new",
+    category_id: options.categoryId,
+    currency_id: options.currencyId,
+    verbose: options.verbose ?? true,
+  });
+}
+
+export async function checkMercadoLivreFlexItem(
+  accessToken: string,
+  siteId: string,
+  itemId: string,
+) {
+  const response = await fetch(
+    `https://api.mercadolibre.com/sites/${siteId}/shipping/selfservice/items/${itemId}`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        accept: "application/json",
+      },
+      cache: "no-store",
+    },
+  );
+
+  if (response.status === 204) {
+    return true;
+  }
+
+  if (response.status === 403 || response.status === 404) {
+    return false;
+  }
+
+  const text = await response.text();
+  throw new Error(text || "Falha ao consultar disponibilidade do Flex.");
+}
+
 export async function getMercadoLivreUserProfile(accessToken: string) {
   return mercadoLivreRequest<Record<string, unknown>>("/users/me", accessToken);
 }
@@ -132,6 +243,99 @@ export async function getMercadoLivreItems(accessToken: string, itemIds: string[
   );
 
   return response.flatMap((item) => (item.body ? [item.body] : []));
+}
+
+export async function getMercadoLivreItem(accessToken: string, itemId: string) {
+  return mercadoLivreRequest<Record<string, unknown>>(`/items/${itemId}`, accessToken);
+}
+
+export async function updateMercadoLivreItem(
+  accessToken: string,
+  itemId: string,
+  payload: { price?: number; available_quantity?: number; status?: "active" | "paused" | "closed" },
+) {
+  const response = await fetch(buildUrl(`/items/${itemId}`), {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+      accept: "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  return parseJsonResponse<Record<string, unknown>>(response);
+}
+
+export async function searchMercadoLivreQuestions(
+  accessToken: string,
+  sellerId: string,
+  options: { status?: "UNANSWERED" | "ANSWERED"; limit?: number; offset?: number } = {},
+) {
+  return mercadoLivreRequest<{
+    questions?: Array<Record<string, unknown>>;
+    total?: number;
+  }>("/my/received_questions/search", accessToken, {
+    seller_id: sellerId,
+    status: options.status,
+    limit: options.limit ?? 50,
+    offset: options.offset ?? 0,
+    api_version: 4,
+  });
+}
+
+export async function answerMercadoLivreQuestion(
+  accessToken: string,
+  questionId: string | number,
+  text: string,
+) {
+  const response = await fetch(buildUrl("/answers"), {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+      accept: "application/json",
+    },
+    body: JSON.stringify({ question_id: questionId, text }),
+  });
+
+  return parseJsonResponse<Record<string, unknown>>(response);
+}
+
+export async function searchMercadoLivrePublicItems(
+  siteId: string,
+  query: { q?: string; category?: string; limit?: number; offset?: number },
+) {
+  const url = new URL(`https://api.mercadolibre.com/sites/${siteId}/search`);
+  if (query.q) url.searchParams.set("q", query.q);
+  if (query.category) url.searchParams.set("category", query.category);
+  url.searchParams.set("limit", String(query.limit ?? 20));
+  url.searchParams.set("offset", String(query.offset ?? 0));
+
+  const response = await fetch(url, { headers: { accept: "application/json" }, cache: "no-store" });
+  return parseJsonResponse<{
+    results?: Array<Record<string, unknown>>;
+    paging?: Record<string, unknown>;
+  }>(response);
+}
+
+export async function getMercadoLivreCategoryHighlights(siteId: string, categoryId: string) {
+  const url = new URL(`https://api.mercadolibre.com/highlights/${siteId}/category/${categoryId}`);
+  const response = await fetch(url, { headers: { accept: "application/json" }, cache: "no-store" });
+  return parseJsonResponse<{ content?: Array<Record<string, unknown>> }>(response);
+}
+
+export async function getMercadoLivreTrends(siteId: string, categoryId?: string) {
+  const path = categoryId ? `/trends/${siteId}/${categoryId}` : `/trends/${siteId}`;
+  const url = new URL(`https://api.mercadolibre.com${path}`);
+  const response = await fetch(url, { headers: { accept: "application/json" }, cache: "no-store" });
+  return parseJsonResponse<Array<{ keyword: string; url?: string }>>(response);
+}
+
+export async function getMercadoLivrePublicItem(itemId: string) {
+  const url = new URL(`https://api.mercadolibre.com/items/${itemId}`);
+  const response = await fetch(url, { headers: { accept: "application/json" }, cache: "no-store" });
+  return parseJsonResponse<Record<string, unknown>>(response);
 }
 
 export async function getMercadoLivreItemPromotions(accessToken: string, itemId: string) {
