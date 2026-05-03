@@ -565,15 +565,24 @@ function buildPaymentUpsert(
 ) {
   const paymentId = String(payment.id ?? "");
   const externalReference = payment.external_reference ? String(payment.external_reference) : null;
-  const feeDetails = Array.isArray(payment.fee_details)
-    ? (payment.fee_details as Array<Record<string, unknown>>)
+
+  const charges = Array.isArray(payment.charges_details)
+    ? (payment.charges_details as Array<Record<string, unknown>>)
     : [];
-  const marketplaceFeeAmount = feeDetails
-    .filter((fee) => String(fee.type ?? "").includes("application"))
-    .reduce((total, fee) => total + (parseNumber(fee.amount) ?? 0), 0);
-  const mercadopagoFeeAmount = feeDetails
-    .filter((fee) => !String(fee.type ?? "").includes("application"))
-    .reduce((total, fee) => total + (parseNumber(fee.amount) ?? 0), 0);
+
+  function chargeAmount(name: string): number {
+    return charges
+      .filter((c) => c.type === "fee" && c.name === name)
+      .reduce((total, c) => {
+        const amounts = c.amounts && typeof c.amounts === "object" ? (c.amounts as Record<string, unknown>) : null;
+        const original = parseNumber(amounts?.original) ?? 0;
+        const refunded = parseNumber(amounts?.refunded) ?? 0;
+        return total + (original - refunded);
+      }, 0);
+  }
+
+  const marketplaceFeeAmount = chargeAmount("ml_sale_fee");
+  const mercadopagoFeeAmount = chargeAmount("mp_processing_fee") + chargeAmount("financing_fee");
   const orderId =
     payment.order && typeof payment.order === "object" && "id" in payment.order
       ? String((payment.order as Record<string, unknown>).id ?? "") || null

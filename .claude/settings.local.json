@@ -27,7 +27,8 @@
       "Bash(npx vitest *)",
       "Bash(netstat -ano)",
       "Bash(npm install *)",
-      "Bash(plink *)"
+      "Bash(plink *)",
+      "Bash(git rev-list *)"
     ]
   }
 }

@@ -18,6 +18,7 @@ const CSRF_EXEMPT_PATHS = [
   "/api/integrations/mercadopago/callback",
   "/api/webhooks",
   "/api/cron",
+  "/api/admin/reprocess-payments",
 ];
 
 function generateToken(): string {

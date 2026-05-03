@@ -124,6 +124,7 @@ export async function getDashboardOverview(orgId: string, periodKey: PeriodKey =
           mercadopagoFeeAmount: true,
           paymentCreatedAt: true,
           listingId: true,
+          merchantOrderId: true,
           listing: { select: { title: true, itemId: true, permalink: true } },
         },
         orderBy: { paymentCreatedAt: "desc" },
@@ -136,6 +137,8 @@ export async function getDashboardOverview(orgId: string, periodKey: PeriodKey =
           netReceivedAmount: true,
           marketplaceFeeAmount: true,
           mercadopagoFeeAmount: true,
+          merchantOrderId: true,
+          paymentId: true,
         },
       }),
       prisma.listingAdMetric.findMany({
@@ -210,8 +213,13 @@ export async function getDashboardOverview(orgId: string, periodKey: PeriodKey =
     const adCostCurrent = sumCost(adMetricsCurrent);
     const adCostPrior = sumCost(adMetricsPrior);
 
-    const countCurrent = paymentsCurrent.length;
-    const countPrior = paymentsPrior.length;
+    function distinctOrders(rows: Array<{ merchantOrderId: string | null; paymentId: string }>): number {
+      const seen = new Set<string>();
+      for (const r of rows) seen.add(r.merchantOrderId ?? `payment:${r.paymentId}`);
+      return seen.size;
+    }
+    const countCurrent = distinctOrders(paymentsCurrent);
+    const countPrior = distinctOrders(paymentsPrior);
     const ticketCurrent = countCurrent > 0 ? revenueCurrent / countCurrent : 0;
     const ticketPrior = countPrior > 0 ? revenuePrior / countPrior : 0;
 
