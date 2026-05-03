@@ -53,6 +53,7 @@ export function buildMercadoLivreAuthUrl(state: string) {
   url.searchParams.set("client_id", config.clientId);
   url.searchParams.set("redirect_uri", config.redirectUri);
   url.searchParams.set("state", state);
+  url.searchParams.set("scope", "offline_access read write");
 
   return url.toString();
 }

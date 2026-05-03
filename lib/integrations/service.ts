@@ -69,7 +69,7 @@ async function upsertConnection(params: {
       accountLabel: params.accountLabel,
       siteId: params.siteId,
       accessTokenEnc: encryptSecret(params.accessToken),
-      refreshTokenEnc: params.refreshToken ? encryptSecret(params.refreshToken) : null,
+      ...(params.refreshToken ? { refreshTokenEnc: encryptSecret(params.refreshToken) } : {}),
       tokenType: params.tokenType,
       scopes: params.scopes,
       tokenExpiresAt: params.tokenExpiresAt,
