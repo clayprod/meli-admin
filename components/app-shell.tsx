@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -12,11 +13,13 @@ import {
   Package2,
   PlugZap,
   ReceiptText,
+  Settings,
   Store,
   User,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { fetchWithCsrf } from "@/lib/csrf-client";
 import { cn } from "@/lib/utils";
 
 const navigation = [
@@ -30,6 +33,7 @@ const navigation = [
   { href: "/scenarios", label: "Cenários", icon: ClipboardList },
   { href: "/integrations", label: "Integrações", icon: PlugZap },
   { href: "/admin/rates", label: "Tarifas", icon: Boxes },
+  { href: "/settings", label: "Configurações", icon: Settings },
 ];
 
 type AppShellProps = {
@@ -44,7 +48,7 @@ export function AppShell({ currentPath, title, description, userEmail, children 
   const router = useRouter();
 
   async function handleLogout() {
-    await fetch("/api/auth/logout", { method: "POST" });
+    await fetchWithCsrf("/api/auth/logout", { method: "POST" });
     router.push("/login");
     router.refresh();
   }
@@ -55,10 +59,27 @@ export function AppShell({ currentPath, title, description, userEmail, children 
       <aside className="hidden w-64 shrink-0 flex-col border-r border-slate-100 bg-white lg:flex">
         {/* Logo */}
         <div className="flex h-16 items-center gap-3 border-b border-slate-100 px-6">
-          <div className="flex size-8 items-center justify-center rounded-lg bg-orange-500 text-white">
-            <BarChart3 className="size-4" />
-          </div>
-          <span className="text-base font-semibold text-slate-900">Meli Admin</span>
+          <Image
+            src="/tenryu_horizontal.png"
+            alt="Tenryu"
+            width={1413}
+            height={423}
+            priority
+            unoptimized
+            className="h-6 w-auto"
+          />
+          <span className="text-xl font-light text-slate-300" aria-hidden="true">
+            |
+          </span>
+          <Image
+            src="/Logotipo_MercadoLivre.png"
+            alt="Mercado Livre"
+            width={500}
+            height={126}
+            priority
+            unoptimized
+            className="h-5 w-auto"
+          />
         </div>
 
         {/* Nav */}

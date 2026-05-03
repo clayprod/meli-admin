@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { fetchWithCsrf } from "@/lib/csrf-client";
 
 type SyncButtonProps = {
   endpoint: string;
@@ -21,7 +22,7 @@ export function SyncButton({ endpoint, payload, label }: SyncButtonProps) {
     setError(null);
 
     try {
-      const response = await fetch(endpoint, {
+      const response = await fetchWithCsrf(endpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -47,7 +48,7 @@ export function SyncButton({ endpoint, payload, label }: SyncButtonProps) {
       <Button type="button" variant="secondary" onClick={handleClick} disabled={busy}>
         {busy ? "Sincronizando..." : label}
       </Button>
-      {error ? <p className="text-xs font-medium text-rose-600">{error}</p> : null}
+      {error ? <p className="text-xs font-medium text-red-600">{error}</p> : null}
     </div>
   );
 }

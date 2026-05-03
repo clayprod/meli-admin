@@ -15,6 +15,10 @@ const buttonVariants = cva(
           "bg-white/85 text-slate-900 ring-1 ring-slate-200 hover:bg-white",
         ghost: "text-slate-700 hover:bg-slate-100",
         outline: "border border-slate-200 bg-white text-slate-900 hover:bg-slate-50",
+        success:
+          "bg-[color:var(--success)] text-[color:var(--success-fg)] shadow-md shadow-green-900/15 hover:brightness-95",
+        danger:
+          "bg-[color:var(--danger)] text-[color:var(--danger-fg)] shadow-md shadow-red-900/15 hover:brightness-95",
       },
       size: {
         default: "h-11 px-4 py-2",

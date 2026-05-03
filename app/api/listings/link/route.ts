@@ -1,9 +1,16 @@
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 
+import { clientIpFromHeaders } from "@/lib/auth/rate-limit";
+import { getSession } from "@/lib/auth/session";
 import { linkProductToListing } from "@/lib/db/integration-queries";
 
 export async function POST(request: Request) {
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const body = (await request.json()) as { listingId?: string; productId?: string | null };
 
@@ -11,7 +18,13 @@ export async function POST(request: Request) {
       throw new Error("listingId obrigatorio.");
     }
 
-    await linkProductToListing(body.listingId, body.productId || null);
+    await linkProductToListing({
+      orgId: session.orgId,
+      userId: session.userId,
+      ipAddress: clientIpFromHeaders(request.headers),
+      listingId: body.listingId,
+      productId: body.productId || null,
+    });
     revalidatePath("/listings");
     revalidatePath("/products");
 

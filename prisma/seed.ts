@@ -5,6 +5,10 @@ import { defaultRates, samplePricingInput } from "../lib/pricing/reference-data"
 
 const prisma = new PrismaClient();
 
+const DEFAULT_ORG_ID = "org_default_tenryu";
+const DEFAULT_ORG_SLUG = "tenryu";
+const DEFAULT_ORG_NAME = "Tenryu";
+
 async function main() {
   await prisma.pricingResult.deleteMany();
   await prisma.pricingScenario.deleteMany();
@@ -12,6 +16,18 @@ async function main() {
   await prisma.product.deleteMany();
   await prisma.freightRate.deleteMany();
   await prisma.fullStorageRate.deleteMany();
+
+  await prisma.org.upsert({
+    where: { id: DEFAULT_ORG_ID },
+    update: {},
+    create: {
+      id: DEFAULT_ORG_ID,
+      name: DEFAULT_ORG_NAME,
+      slug: DEFAULT_ORG_SLUG,
+      taxRegime: "SIMPLES_NACIONAL",
+      simplesAnexo: "I",
+    },
+  });
 
   await prisma.freightRate.createMany({
     data: defaultRates.freightRates.map((rate) => ({
@@ -42,6 +58,7 @@ async function main() {
 
   const product = await prisma.product.create({
     data: {
+      orgId: DEFAULT_ORG_ID,
       name: samplePricingInput.product.name,
       sku: samplePricingInput.product.sku,
       weightKg: samplePricingInput.product.weightKg,

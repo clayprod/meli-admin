@@ -6,12 +6,14 @@ import { SyncButton } from "@/components/integrations/sync-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { requireSessionForPage } from "@/lib/auth/session";
 import { getIntegrationOverview } from "@/lib/db/integration-queries";
 
 export const dynamic = "force-dynamic";
 
 export default async function IntegrationsPage() {
-  const overview = await getIntegrationOverview();
+  const session = await requireSessionForPage();
+  const overview = await getIntegrationOverview(session.orgId);
   const meliConnections = overview.connections.filter((connection) => connection.provider === "MERCADO_LIVRE");
   const mpConnections = overview.connections.filter((connection) => connection.provider === "MERCADO_PAGO");
 
@@ -20,6 +22,7 @@ export default async function IntegrationsPage() {
       currentPath="/integrations"
       title="Integracoes e sincronizacao"
       description="Centro de conexao OAuth, sincronizacao de listings reais, promocoes, ads e conciliacao do Mercado Pago."
+      userEmail={session.email}
     >
       <div className="grid gap-6">
         <section className="grid gap-4 xl:grid-cols-4">
@@ -186,7 +189,7 @@ function ProviderCard({
               </div>
               {connection.lastSyncStatus ? (
                 <div className="mt-2 flex items-center gap-2 text-xs text-slate-500">
-                  {connection.lastSyncStatus === "success" ? <CheckCircle2 className="size-3.5 text-emerald-600" /> : <CircleAlert className="size-3.5 text-amber-600" />}
+                  {connection.lastSyncStatus === "success" ? <CheckCircle2 className="size-3.5 text-green-600" /> : <CircleAlert className="size-3.5 text-amber-600" />}
                   <span>Ultimo resultado: {connection.lastSyncStatus}</span>
                 </div>
               ) : null}

@@ -2,6 +2,7 @@ import { IntegrationProvider } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import {
   checkMercadoLivreFlexItem,
@@ -60,12 +61,17 @@ function buildShippingQuotePayload(response: {
 }
 
 export async function POST(request: Request) {
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const payload = requestSchema.parse(await request.json());
 
     const selectedListing = payload.listingId
-      ? await prisma.marketplaceListing.findUnique({
-          where: { id: payload.listingId },
+      ? await prisma.marketplaceListing.findFirst({
+          where: { id: payload.listingId, connection: { orgId: session.orgId } },
           include: { connection: true },
         })
       : null;
@@ -92,7 +98,7 @@ export async function POST(request: Request) {
 
     const primaryConnection =
       selectedListing?.connection ??
-      (await getPrimaryConnection(IntegrationProvider.MERCADO_LIVRE));
+      (await getPrimaryConnection(session.orgId, IntegrationProvider.MERCADO_LIVRE));
     const accessToken = primaryConnection ? await getValidAccessToken(primaryConnection) : null;
     const sellerId = selectedListing?.sellerId ?? primaryConnection?.externalUserId ?? null;
     const dimensions = buildDimensions(

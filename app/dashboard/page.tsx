@@ -5,7 +5,7 @@ import { RevenueChart } from "@/components/dashboard/revenue-chart";
 import { MetricCard } from "@/components/metric-card";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getSession } from "@/lib/auth/session";
+import { requireSessionForPage } from "@/lib/auth/session";
 import { getFinanceDashboardData } from "@/lib/db/integration-queries";
 import { formatCurrency } from "@/lib/format";
 
@@ -22,7 +22,8 @@ const statusTone: Record<string, "success" | "warning" | "critical" | "info" | "
 };
 
 export default async function DashboardPage() {
-  const [session, data] = await Promise.all([getSession(), getFinanceDashboardData()]);
+  const session = await requireSessionForPage();
+  const data = await getFinanceDashboardData(session.orgId);
 
   const last = data.weeklySeries.at(-1);
   const prev = data.weeklySeries.at(-2);

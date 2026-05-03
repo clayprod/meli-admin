@@ -1,19 +1,22 @@
 import { AppShell } from "@/components/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { requireSessionForPage } from "@/lib/auth/session";
 import { getProductsData } from "@/lib/db/queries";
 import { formatCurrency } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
 export default async function ProductsPage() {
-  const products = await getProductsData();
+  const session = await requireSessionForPage();
+  const products = await getProductsData(session.orgId);
 
   return (
     <AppShell
       currentPath="/products"
       title="Catalogo de produtos"
       description="Base inicial para o CRUD de produtos com peso, dimensoes e historico de precificacao."
+      userEmail={session.email}
     >
       <Card>
         <CardHeader>

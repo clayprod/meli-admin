@@ -100,6 +100,10 @@ export async function mercadoPagoRequest<T>(path: string, accessToken: string, q
   return parseJsonResponse<T>(response);
 }
 
+export async function getMercadoPagoPayment(accessToken: string, paymentId: string | number) {
+  return mercadoPagoRequest<Record<string, unknown>>(`/v1/payments/${paymentId}`, accessToken);
+}
+
 export async function searchMercadoPagoPayments(
   accessToken: string,
   options: {
@@ -111,7 +115,7 @@ export async function searchMercadoPagoPayments(
 ) {
   return mercadoPagoRequest<{
     results?: Array<Record<string, unknown>>;
-    paging?: Record<string, unknown>;
+    paging?: { total?: number; offset?: number; limit?: number };
   }>("/v1/payments/search", accessToken, {
     begin_date: options.beginDate,
     end_date: options.endDate,
@@ -121,4 +125,35 @@ export async function searchMercadoPagoPayments(
     limit: options.limit ?? 50,
     offset: options.offset ?? 0,
   });
+}
+
+export async function searchAllMercadoPagoPayments(
+  accessToken: string,
+  options: { beginDate: string; endDate: string; pageSize?: number; maxItems?: number },
+) {
+  const pageSize = options.pageSize ?? 100;
+  const maxItems = options.maxItems ?? 5_000;
+  const out: Array<Record<string, unknown>> = [];
+  let offset = 0;
+
+  while (out.length < maxItems) {
+    const response = await searchMercadoPagoPayments(accessToken, {
+      beginDate: options.beginDate,
+      endDate: options.endDate,
+      limit: pageSize,
+      offset,
+    });
+
+    const page = response.results ?? [];
+    if (page.length === 0) break;
+    out.push(...page);
+
+    const total = response.paging?.total ?? 0;
+    if (total > 0 && offset + page.length >= total) break;
+    if (page.length < pageSize) break;
+
+    offset += page.length;
+  }
+
+  return out.slice(0, maxItems);
 }

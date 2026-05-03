@@ -1,19 +1,22 @@
 import { AppShell } from "@/components/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { requireSessionForPage } from "@/lib/auth/session";
 import { getScenariosData } from "@/lib/db/queries";
 import { formatCurrency, formatPercent } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
 export default async function ScenariosPage() {
-  const scenarios = await getScenariosData();
+  const session = await requireSessionForPage();
+  const scenarios = await getScenariosData(session.orgId);
 
   return (
     <AppShell
       currentPath="/scenarios"
       title="Cenarios simulados"
       description="Comparativo inicial entre estrategias de margem e ROAS para o mesmo produto, ainda em memoria local."
+      userEmail={session.email}
     >
       <Card>
         <CardHeader>

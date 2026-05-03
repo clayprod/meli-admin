@@ -1,20 +1,24 @@
 import { AppShell } from "@/components/app-shell";
 import { LinkListingControl } from "@/components/listings/link-listing-control";
+import { UpdateListingControl } from "@/components/listings/update-listing-control";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { requireSessionForPage } from "@/lib/auth/session";
 import { getMarketplaceListingsOverview } from "@/lib/db/integration-queries";
 import { formatCurrency } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
 export default async function ListingsPage() {
-  const overview = await getMarketplaceListingsOverview();
+  const session = await requireSessionForPage();
+  const overview = await getMarketplaceListingsOverview(session.orgId);
 
   return (
     <AppShell
       currentPath="/listings"
       title="Listings reais do marketplace"
       description="Camada de sincronizacao entre seus produtos internos e os itens reais do seller no Mercado Livre."
+      userEmail={session.email}
     >
       <Card>
         <CardHeader>
@@ -48,7 +52,20 @@ export default async function ListingsPage() {
                       </div>
                     </div>
                   </td>
-                  <td className="px-5 py-4">{formatCurrency(listing.price)}</td>
+                  <td className="px-5 py-4">
+                    <div className="space-y-2">
+                      <p>{formatCurrency(listing.price)}</p>
+                      <p className="text-xs text-slate-500">Estoque: {listing.availableQuantity}</p>
+                      <UpdateListingControl
+                        listingId={listing.id}
+                        itemId={listing.itemId}
+                        currentPrice={listing.price}
+                        currentAvailableQuantity={listing.availableQuantity}
+                        currentStatus={listing.status}
+                        suggestedPrice={listing.suggestedPrice}
+                      />
+                    </div>
+                  </td>
                   <td className="px-5 py-4">{listing.suggestedPrice ? formatCurrency(listing.suggestedPrice) : "Sem calculo vinculado"}</td>
                   <td className="px-5 py-4">{listing.logisticType ?? "nao informado"}</td>
                   <td className="px-5 py-4">

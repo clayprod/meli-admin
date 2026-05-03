@@ -1,5 +1,6 @@
 import { IntegrationProvider } from "@prisma/client";
 
+import { writeAudit } from "@/lib/auth/audit";
 import { hasDatabaseUrl, isDatabaseConnectionError, prisma } from "@/lib/db/prisma";
 import { getIntegrationEnvStatus } from "@/lib/integrations/env";
 
@@ -65,7 +66,7 @@ type FinanceOverview = {
   } | null;
 };
 
-export async function getIntegrationOverview() {
+export async function getIntegrationOverview(orgId: string) {
   const envStatus = getIntegrationEnvStatus();
 
   return withDatabaseReadFallback(
@@ -81,12 +82,13 @@ export async function getIntegrationOverview() {
       const [connections, listingCount, promotionCount, adMetricCount, paymentCount] =
         await Promise.all([
           prisma.integrationConnection.findMany({
+            where: { orgId },
             orderBy: [{ provider: "asc" }, { updatedAt: "desc" }],
           }),
-          prisma.marketplaceListing.count(),
-          prisma.listingPromotion.count(),
-          prisma.listingAdMetric.count(),
-          prisma.financialPayment.count(),
+          prisma.marketplaceListing.count({ where: { connection: { orgId } } }),
+          prisma.listingPromotion.count({ where: { connection: { orgId } } }),
+          prisma.listingAdMetric.count({ where: { connection: { orgId } } }),
+          prisma.financialPayment.count({ where: { connection: { orgId } } }),
         ]);
 
       return {
@@ -101,7 +103,7 @@ export async function getIntegrationOverview() {
   );
 }
 
-export async function getMarketplaceListingsOverview() {
+export async function getMarketplaceListingsOverview(orgId: string) {
   return withDatabaseReadFallback(
     {
       listings: [],
@@ -111,6 +113,7 @@ export async function getMarketplaceListingsOverview() {
     async () => {
       const [listings, products, connectionAvailable] = await Promise.all([
         prisma.marketplaceListing.findMany({
+          where: { connection: { orgId } },
           include: {
             product: {
               include: {
@@ -139,10 +142,13 @@ export async function getMarketplaceListingsOverview() {
           take: 100,
         }),
         prisma.product.findMany({
+          where: { orgId },
           orderBy: { name: "asc" },
           select: { id: true, name: true, sku: true },
         }),
-        prisma.integrationConnection.count({ where: { provider: IntegrationProvider.MERCADO_LIVRE } }),
+        prisma.integrationConnection.count({
+          where: { orgId, provider: IntegrationProvider.MERCADO_LIVRE },
+        }),
       ]);
 
       return {
@@ -174,11 +180,12 @@ export async function getMarketplaceListingsOverview() {
   );
 }
 
-export async function getPromotionsOverview() {
+export async function getPromotionsOverview(orgId: string) {
   return withDatabaseReadFallback(
     { promotions: [], automaticExclusionHint: true },
     async () => {
       const promotions = await prisma.listingPromotion.findMany({
+        where: { connection: { orgId } },
         include: {
           listing: {
             include: {
@@ -214,11 +221,12 @@ export async function getPromotionsOverview() {
   );
 }
 
-export async function getAdvertisingOverview(): Promise<AdvertisingOverview> {
+export async function getAdvertisingOverview(orgId: string): Promise<AdvertisingOverview> {
   return withDatabaseReadFallback<AdvertisingOverview>(
     { rows: [], totals: null },
     async () => {
       const metrics = await prisma.listingAdMetric.findMany({
+        where: { connection: { orgId } },
         include: {
           listing: {
             include: {
@@ -284,11 +292,12 @@ export async function getAdvertisingOverview(): Promise<AdvertisingOverview> {
   );
 }
 
-export async function getFinanceOverview(): Promise<FinanceOverview> {
+export async function getFinanceOverview(orgId: string): Promise<FinanceOverview> {
   return withDatabaseReadFallback<FinanceOverview>(
     { payments: [], totals: null },
     async () => {
       const payments = await prisma.financialPayment.findMany({
+        where: { connection: { orgId } },
         include: {
           listing: true,
           product: true,
@@ -351,7 +360,7 @@ function weekLabel(key: string): string {
 
 type WeeklySeries = { weekLabel: string; gmv: number; net: number; fees: number };
 
-export async function getFinanceDashboardData(): Promise<{
+export async function getFinanceDashboardData(orgId: string): Promise<{
   weeklySeries: WeeklySeries[];
   totals: { gmv: number; net: number; marketplaceFees: number; activeListings: number };
   topListings: { title: string; itemId: string; revenue: number; paymentCount: number }[];
@@ -376,11 +385,11 @@ export async function getFinanceDashboardData(): Promise<{
 
     const [payments, activeListings] = await Promise.all([
       prisma.financialPayment.findMany({
-        where: { approvedAt: { gte: since } },
+        where: { connection: { orgId }, approvedAt: { gte: since } },
         include: { listing: { select: { title: true, itemId: true } } },
         orderBy: { approvedAt: "desc" },
       }),
-      prisma.marketplaceListing.count({ where: { status: "active" } }),
+      prisma.marketplaceListing.count({ where: { connection: { orgId }, status: "active" } }),
     ]);
 
     const weekMap = new Map<string, WeeklySeries>();
@@ -441,9 +450,10 @@ export async function getFinanceDashboardData(): Promise<{
   });
 }
 
-export async function getMarketplaceListingsMinimal() {
+export async function getMarketplaceListingsMinimal(orgId: string) {
   return withDatabaseReadFallback([], async () => {
     const listings = await prisma.marketplaceListing.findMany({
+      where: { connection: { orgId } },
       select: {
         id: true,
         itemId: true,
@@ -461,28 +471,53 @@ export async function getMarketplaceListingsMinimal() {
   });
 }
 
-export async function linkProductToListing(listingId: string, productId: string | null) {
+export async function linkProductToListing(params: {
+  orgId: string;
+  userId: string;
+  ipAddress?: string | null;
+  listingId: string;
+  productId: string | null;
+}) {
   if (!hasDatabaseUrl()) {
     throw new Error("DATABASE_URL nao configurada.");
   }
 
+  const { orgId, userId, ipAddress, listingId, productId } = params;
+
   try {
-    const listing = await prisma.marketplaceListing.update({
-      where: { id: listingId },
-      data: {
-        productId,
-      },
+    const existing = await prisma.marketplaceListing.findFirst({
+      where: { id: listingId, connection: { orgId } },
+      select: { id: true, productId: true },
     });
 
-    await prisma.auditLog.create({
-      data: {
-        entity: "MarketplaceListing",
-        entityId: listing.id,
-        action: productId ? "link-product" : "unlink-product",
-        afterJson: {
-          productId,
-        },
-      },
+    if (!existing) {
+      throw new Error("Anuncio nao encontrado nesta organizacao.");
+    }
+
+    if (productId) {
+      const product = await prisma.product.findFirst({
+        where: { id: productId, orgId },
+        select: { id: true },
+      });
+      if (!product) {
+        throw new Error("Produto nao pertence a esta organizacao.");
+      }
+    }
+
+    const listing = await prisma.marketplaceListing.update({
+      where: { id: listingId },
+      data: { productId },
+    });
+
+    await writeAudit({
+      orgId,
+      userId,
+      ipAddress,
+      entity: "MarketplaceListing",
+      entityId: listing.id,
+      action: productId ? "link-product" : "unlink-product",
+      before: { productId: existing.productId },
+      after: { productId },
     });
 
     return listing;

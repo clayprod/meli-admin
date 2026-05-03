@@ -5,7 +5,29 @@
       "Bash(git commit -m ' *)",
       "Bash(git push *)",
       "Bash(node *)",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(xargs grep *)",
+      "Bash(npx prisma *)",
+      "Bash(findstr /i \"env\")",
+      "PowerShell(Test-NetConnection *)",
+      "PowerShell(Get-Command *)",
+      "PowerShell($env:DATABASE_URL = \"postgresql://postgres:534A67A34C85DBDBCDC16FC84B354@195.35.40.49:5432/tenryu?schema=meli_admin\"; npx prisma migrate status 2>&1 | Select-Object -First 20)",
+      "PowerShell(echo y | & \"C:\\\\Program Files\\\\PuTTY\\\\plink.exe\" -ssh \"root@195.35.40.49\" -pw \"Hgcn2hpn##12\" -batch \"whoami; hostname; ss -tlnp | grep 5432\")",
+      "PowerShell(cmd /c 'echo y | \"C:\\\\Program Files\\\\PuTTY\\\\plink.exe\" -ssh root@195.35.40.49 -pw \"Hgcn2hpn##12\" \"whoami\"')",
+      "PowerShell(Start-Process -FilePath \"C:\\\\Program Files\\\\PuTTY\\\\plink.exe\" -ArgumentList @\\(\"-ssh\",\"root@195.35.40.49\",\"-pw\",\"Hgcn2hpn##12\",\"-hostkey\",\"SHA256:vix8Jejp/NpLDFLn+D2HljSUALz5u+aN7RshsxnVGIU\",\"-batch\",\"-N\",\"-L\",\"5433:127.0.0.1:5432\"\\) -WindowStyle Hidden -PassThru | Select-Object Id,ProcessName)",
+      "PowerShell(npx prisma migrate status 2>&1 | Select-Object -Last 30)",
+      "PowerShell(& \"C:\\\\Program Files\\\\PuTTY\\\\plink.exe\" -ssh root@195.35.40.49 -pw \"Hgcn2hpn##12\" -hostkey \"SHA256:vix8Jejp/NpLDFLn+D2HljSUALz5u+aN7RshsxnVGIU\" -batch \"docker ps --format '{{.Names}}\\\\t{{.Image}}\\\\t{{.Ports}}' | grep -i postgres\" 2>&1)",
+      "PowerShell(& \"C:\\\\Program Files\\\\PuTTY\\\\plink.exe\" -ssh root@195.35.40.49 -pw \"Hgcn2hpn##12\" -hostkey \"SHA256:vix8Jejp/NpLDFLn+D2HljSUALz5u+aN7RshsxnVGIU\" -batch \"docker inspect tenryu_postgres.1.wisup3la0i6nzt5foady9o6p4 --format '{{range .Config.Env}}{{println .}}{{end}}' | grep -iE 'pass|user|db'\" 2>&1)",
+      "PowerShell(& \"C:\\\\Program Files\\\\PuTTY\\\\plink.exe\" -ssh root@195.35.40.49 -pw \"Hgcn2hpn##12\" -hostkey \"SHA256:vix8Jejp/NpLDFLn+D2HljSUALz5u+aN7RshsxnVGIU\" -batch \"docker ps --format '{{.Names}}\\\\t{{.Ports}}' | grep -E '5432|55432'\" 2>&1)",
+      "PowerShell(Get-Process *)",
+      "PowerShell(npx prisma migrate deploy 2>&1 | Select-Object -Last 20)",
+      "PowerShell($pw = -join \\(\\(48..57\\) + \\(65..90\\) + \\(97..122\\) + \\(33,35,36,42,64\\) | Get-Random -Count 24 | ForEach-Object {[char]$_}\\); $env:BOOTSTRAP_USER_EMAIL = \"clayton.mcosta@icloud.com\"; $env:BOOTSTRAP_USER_PASSWORD = $pw; npx tsx scripts/bootstrap.ts 2>&1 | Select-Object -Last 10; \"PASSWORD GERADA: $pw\")",
+      "PowerShell(npx vitest run tests/simples-nacional.test.ts 2>&1 | Select-Object -Last 25)",
+      "PowerShell(npx tsc --noEmit 2>&1 | Select-Object -First 30)",
+      "Bash(npx vitest *)",
+      "Bash(netstat -ano)",
+      "Bash(npm install *)",
+      "Bash(plink *)"
     ]
   }
 }

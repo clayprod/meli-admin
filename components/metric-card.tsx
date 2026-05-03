@@ -19,7 +19,16 @@ type MetricCardProps = {
 };
 
 export function MetricCard({ title, value, helper, trend, tone = "neutral", icon: Icon }: MetricCardProps) {
-  const iconBg = tone === "orange" || tone === "neutral" ? "bg-orange-50 text-orange-600" : tone === "success" ? "bg-emerald-50 text-emerald-600" : tone === "warning" ? "bg-amber-50 text-amber-600" : tone === "critical" ? "bg-rose-50 text-rose-600" : "bg-sky-50 text-sky-600";
+  const iconBg =
+    tone === "orange" || tone === "neutral"
+      ? "bg-orange-50 text-orange-600"
+      : tone === "success"
+      ? "bg-green-50 text-green-600"
+      : tone === "warning"
+      ? "bg-amber-50 text-amber-600"
+      : tone === "critical"
+      ? "bg-red-50 text-red-600"
+      : "bg-sky-50 text-sky-600";
 
   return (
     <Card className="overflow-hidden">
@@ -38,7 +47,7 @@ export function MetricCard({ title, value, helper, trend, tone = "neutral", icon
           <span
             className={cn(
               "inline-flex items-center gap-1 text-xs font-medium",
-              trend.direction === "up" ? "text-emerald-600" : trend.direction === "down" ? "text-rose-600" : "text-slate-500",
+              trend.direction === "up" ? "text-green-600" : trend.direction === "down" ? "text-red-600" : "text-slate-500",
             )}
           >
             {trend.direction === "up" && <TrendingUp className="size-3" />}

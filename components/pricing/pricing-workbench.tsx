@@ -18,6 +18,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { fetchWithCsrf } from "@/lib/csrf-client";
 import { formatCurrency, formatNumber, formatPercent } from "@/lib/format";
 import { calculatePricing, calculatePricingFromPrice } from "@/lib/pricing/calculate-pricing";
 import { samplePricingInput } from "@/lib/pricing/reference-data";
@@ -94,7 +95,22 @@ function getModeLabel(mode: FulfillmentMode) {
   return mode === "FULL" ? "Full" : mode === "FLEX" ? "Flex" : "Logistica propria";
 }
 
-export function PricingWorkbench({ listings }: { listings: ListingOption[] }) {
+type TaxContext = {
+  regime: string;
+  anexo: string | null;
+  rbt12: number | null;
+  effectiveRate: number;
+  bracketIndex: number;
+  nominalRate: number;
+} | null;
+
+export function PricingWorkbench({
+  listings,
+  taxContext,
+}: {
+  listings: ListingOption[];
+  taxContext?: TaxContext;
+}) {
   const router = useRouter();
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -107,9 +123,20 @@ export function PricingWorkbench({ listings }: { listings: ListingOption[] }) {
   const [platformError, setPlatformError] = useState<string | null>(null);
   const [platformContext, setPlatformContext] = useState<PlatformContextResponse | null>(null);
 
+  const initialDefaults = useMemo<PricingFormValues>(() => {
+    if (!taxContext) return defaultValues;
+    return {
+      ...defaultValues,
+      scenario: {
+        ...defaultValues.scenario,
+        simpleTaxRate: Number((taxContext.effectiveRate * 100).toFixed(4)),
+      },
+    };
+  }, [taxContext]);
+
   const form = useForm<PricingFormValues>({
     resolver: zodResolver(pricingFormSchema),
-    defaultValues,
+    defaultValues: initialDefaults,
     mode: "onChange",
   });
 
@@ -258,7 +285,7 @@ export function PricingWorkbench({ listings }: { listings: ListingOption[] }) {
     setPlatformError(null);
 
     try {
-      const response = await fetch("/api/pricing/platform-context", {
+      const response = await fetchWithCsrf("/api/pricing/platform-context", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -314,7 +341,7 @@ export function PricingWorkbench({ listings }: { listings: ListingOption[] }) {
         input.scenario.targetNetMarginRate = calculation.resultingNetMarginRate;
       }
 
-      const response = await fetch("/api/pricing/scenarios", {
+      const response = await fetchWithCsrf("/api/pricing/scenarios", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(input),
@@ -417,7 +444,7 @@ export function PricingWorkbench({ listings }: { listings: ListingOption[] }) {
               ) : null}
             </div>
 
-            {platformError ? <p className="text-sm font-medium text-rose-600">{platformError}</p> : null}
+            {platformError ? <p className="text-sm font-medium text-red-600">{platformError}</p> : null}
 
             {platformContext ? (
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -446,7 +473,7 @@ export function PricingWorkbench({ listings }: { listings: ListingOption[] }) {
           <CardHeader className="flex-row items-start justify-between gap-4">
             <div>
               <CardTitle className="flex items-center gap-3">
-                <Boxes className="size-5 text-emerald-600" /> Lote e custo de compra
+                <Boxes className="size-5 text-green-600" /> Lote e custo de compra
               </CardTitle>
               <CardDescription>
                 Custo unitario com IPI, quantidade do lote e substituicao tributaria.
@@ -580,7 +607,17 @@ export function PricingWorkbench({ listings }: { listings: ListingOption[] }) {
             <Field label="Custo operacional (%)" error={form.formState.errors.scenario?.operationalCostRate?.message}>
               <Input type="number" step="0.1" {...form.register("scenario.operationalCostRate", { valueAsNumber: true })} />
             </Field>
-            <Field label="Impostos simples (%)" error={form.formState.errors.scenario?.simpleTaxRate?.message}>
+            <Field
+              label="Impostos simples (%)"
+              error={form.formState.errors.scenario?.simpleTaxRate?.message}
+              helper={
+                taxContext
+                  ? `Default = aliquota efetiva da Org (Anexo ${taxContext.anexo}, RBT12 ${formatCurrency(
+                      taxContext.rbt12 ?? 0,
+                    )}). Editavel.`
+                  : "Configure o RBT12 em Configuracoes para preencher automaticamente."
+              }
+            >
               <Input type="number" step="0.1" {...form.register("scenario.simpleTaxRate", { valueAsNumber: true })} />
             </Field>
             <Field label="ICMS proprio (%)" error={form.formState.errors.scenario?.ownIcmsRate?.message}>
@@ -606,7 +643,7 @@ export function PricingWorkbench({ listings }: { listings: ListingOption[] }) {
             {isSaving ? "Salvando..." : "Salvar cenario no banco"}
           </Button>
         </div>
-        {saveError ? <p className="text-sm font-medium text-rose-600">{saveError}</p> : null}
+        {saveError ? <p className="text-sm font-medium text-red-600">{saveError}</p> : null}
       </form>
 
       <div className="sticky top-4 h-fit self-start">
@@ -677,7 +714,7 @@ export function PricingWorkbench({ listings }: { listings: ListingOption[] }) {
                     </div>
                     <div className="flex items-center justify-between">
                       <span>Repasse do ML</span>
-                      <span className="font-medium text-emerald-700">-{formatCurrency(calculation.marketplaceShippingRebate)}</span>
+                      <span className="font-medium text-green-700">-{formatCurrency(calculation.marketplaceShippingRebate)}</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span>Seu custo de entrega</span>
@@ -798,7 +835,7 @@ function Field({
     <div className="space-y-2">
       <Label>{label}</Label>
       {children}
-      {error ? <p className="text-xs font-medium text-rose-600">{error}</p> : null}
+      {error ? <p className="text-xs font-medium text-red-600">{error}</p> : null}
       {!error && helper ? <p className="text-xs leading-5 text-slate-500">{helper}</p> : null}
     </div>
   );

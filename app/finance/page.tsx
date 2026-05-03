@@ -1,18 +1,21 @@
 import { AppShell } from "@/components/app-shell";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { requireSessionForPage } from "@/lib/auth/session";
 import { getFinanceOverview } from "@/lib/db/integration-queries";
 import { formatCurrency } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
 export default async function FinancePage() {
-  const overview = await getFinanceOverview();
+  const session = await requireSessionForPage();
+  const overview = await getFinanceOverview(session.orgId);
 
   return (
     <AppShell
       currentPath="/finance"
       title="Conciliacao financeira"
       description="Cruze pagamentos reais do Mercado Pago com listings e produtos internos para validar a margem realizada."
+      userEmail={session.email}
     >
       <div className="grid gap-6">
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

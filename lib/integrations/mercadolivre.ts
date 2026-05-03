@@ -218,31 +218,56 @@ export async function getMercadoLivreUserProfile(accessToken: string) {
   return mercadoLivreRequest<Record<string, unknown>>("/users/me", accessToken);
 }
 
-export async function searchMercadoLivreItemIds(accessToken: string, userId: string, limit = 50) {
-  const response = await mercadoLivreRequest<{ results?: string[] }>(
-    `/users/${userId}/items/search`,
-    accessToken,
-    {
-      search_type: "scan",
-      limit,
-    },
-  );
+export async function searchMercadoLivreItemIds(
+  accessToken: string,
+  userId: string,
+  options: { pageSize?: number; maxItems?: number } = {},
+) {
+  const pageSize = options.pageSize ?? 100;
+  const maxItems = options.maxItems ?? 10_000;
+  const ids: string[] = [];
+  let scrollId: string | undefined;
 
-  return response.results ?? [];
-}
+  while (ids.length < maxItems) {
+    const response = await mercadoLivreRequest<{ results?: string[]; scroll_id?: string }>(
+      `/users/${userId}/items/search`,
+      accessToken,
+      {
+        search_type: "scan",
+        limit: pageSize,
+        scroll_id: scrollId,
+      },
+    );
 
-export async function getMercadoLivreItems(accessToken: string, itemIds: string[]) {
-  if (itemIds.length === 0) {
-    return [];
+    const page = response.results ?? [];
+    if (page.length === 0) break;
+    ids.push(...page);
+
+    if (!response.scroll_id || page.length < pageSize) break;
+    scrollId = response.scroll_id;
   }
 
-  const response = await mercadoLivreRequest<Array<{ body?: Record<string, unknown> }>>(
-    "/items",
-    accessToken,
-    { ids: itemIds.join(",") },
-  );
+  return ids.slice(0, maxItems);
+}
 
-  return response.flatMap((item) => (item.body ? [item.body] : []));
+const ML_MULTIGET_CHUNK = 20;
+
+export async function getMercadoLivreItems(accessToken: string, itemIds: string[]) {
+  if (itemIds.length === 0) return [];
+
+  const out: Record<string, unknown>[] = [];
+
+  for (let i = 0; i < itemIds.length; i += ML_MULTIGET_CHUNK) {
+    const chunk = itemIds.slice(i, i + ML_MULTIGET_CHUNK);
+    const response = await mercadoLivreRequest<Array<{ body?: Record<string, unknown> }>>(
+      "/items",
+      accessToken,
+      { ids: chunk.join(",") },
+    );
+    out.push(...response.flatMap((item) => (item.body ? [item.body] : [])));
+  }
+
+  return out;
 }
 
 export async function getMercadoLivreItem(accessToken: string, itemId: string) {
@@ -265,6 +290,16 @@ export async function updateMercadoLivreItem(
   });
 
   return parseJsonResponse<Record<string, unknown>>(response);
+}
+
+export async function getMercadoLivreQuestion(accessToken: string, questionId: string | number) {
+  return mercadoLivreRequest<Record<string, unknown>>(`/questions/${questionId}`, accessToken, {
+    api_version: 4,
+  });
+}
+
+export async function getMercadoLivreOrder(accessToken: string, orderId: string | number) {
+  return mercadoLivreRequest<Record<string, unknown>>(`/orders/${orderId}`, accessToken);
 }
 
 export async function searchMercadoLivreQuestions(

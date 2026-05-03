@@ -25,6 +25,7 @@ export function getMercadoPagoConfig() {
     redirectUri: readEnv("MERCADOPAGO_REDIRECT_URI"),
     accessToken: readEnv("MERCADOPAGO_ACCESS_TOKEN"),
     publicKey: readEnv("MERCADOPAGO_PUBLIC_KEY"),
+    webhookSecret: readEnv("MERCADOPAGO_WEBHOOK_SECRET"),
   };
 }
 

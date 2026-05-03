@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
+import { fetchWithCsrf } from "@/lib/csrf-client";
 
 type ProductOption = {
   id: string;
@@ -29,7 +30,7 @@ export function LinkListingControl({ listingId, currentProductId, products }: Li
     setError(null);
 
     try {
-      const response = await fetch("/api/listings/link", {
+      const response = await fetchWithCsrf("/api/listings/link", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -66,7 +67,7 @@ export function LinkListingControl({ listingId, currentProductId, products }: Li
       <Button type="button" size="sm" onClick={handleSave} disabled={busy}>
         {busy ? "Salvando..." : "Vincular"}
       </Button>
-      {error ? <p className="text-xs font-medium text-rose-600">{error}</p> : null}
+      {error ? <p className="text-xs font-medium text-red-600">{error}</p> : null}
     </div>
   );
 }

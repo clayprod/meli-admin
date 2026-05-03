@@ -1,12 +1,14 @@
 import { AppShell } from "@/components/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { requireSessionForPage } from "@/lib/auth/session";
 import { getRatesData } from "@/lib/db/queries";
 import { formatCurrency } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
 export default async function RatesPage() {
+  const session = await requireSessionForPage();
   const { freightRates, fullStorageRates } = await getRatesData();
 
   return (
@@ -14,6 +16,7 @@ export default async function RatesPage() {
       currentPath="/admin/rates"
       title="Tarifas e parametros"
       description="Base administrativa inicial para vigencia de frete e armazenagem Full, pronta para sair do hardcode e ir ao banco."
+      userEmail={session.email}
     >
       <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
         <Card>

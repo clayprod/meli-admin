@@ -1,18 +1,36 @@
 import "server-only";
 
-import crypto from "node:crypto";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
-import { COOKIE_NAME, createToken, sessionDurationSeconds, verifyToken } from "./token";
+import { COOKIE_NAME, createToken, sessionDurationSeconds, verifyToken, type SessionPayload } from "./token";
 
-export async function getSession(): Promise<{ email: string } | null> {
+export type Session = SessionPayload;
+
+export async function getSession(): Promise<Session | null> {
   const token = (await cookies()).get(COOKIE_NAME)?.value;
   if (!token) return null;
   return verifyToken(token);
 }
 
-export async function setSession(email: string): Promise<void> {
-  (await cookies()).set(COOKIE_NAME, createToken(email), {
+export async function requireSession(): Promise<Session> {
+  const session = await getSession();
+  if (!session) {
+    throw new Response("Unauthorized", { status: 401 });
+  }
+  return session;
+}
+
+export async function requireSessionForPage(): Promise<Session> {
+  const session = await getSession();
+  if (!session) {
+    redirect("/login");
+  }
+  return session;
+}
+
+export async function setSession(payload: Session): Promise<void> {
+  (await cookies()).set(COOKIE_NAME, createToken(payload), {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
@@ -23,18 +41,4 @@ export async function setSession(email: string): Promise<void> {
 
 export async function clearSession(): Promise<void> {
   (await cookies()).delete(COOKIE_NAME);
-}
-
-export function verifyPassword(password: string): boolean {
-  const hash = process.env.AUTH_PASSWORD_HASH ?? "";
-  const colonIdx = hash.indexOf(":");
-  if (colonIdx < 0) return false;
-  const salt = hash.slice(0, colonIdx);
-  const stored = hash.slice(colonIdx + 1);
-  try {
-    const computed = crypto.scryptSync(password, salt, 64).toString("hex");
-    return crypto.timingSafeEqual(Buffer.from(computed, "hex"), Buffer.from(stored, "hex"));
-  } catch {
-    return false;
-  }
 }

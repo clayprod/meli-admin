@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 
+import { writeAudit } from "@/lib/auth/audit";
 import { calculatePricing } from "@/lib/pricing/calculate-pricing";
 import { samplePricingInput } from "@/lib/pricing/reference-data";
 import type { PricingAlert, PricingInput, PricingResultDraft } from "@/lib/pricing/types";
@@ -133,13 +134,14 @@ function mapDashboardRecord(record: DashboardScenarioRecord | null) {
   };
 }
 
-export async function getDashboardData() {
+export async function getDashboardData(orgId: string) {
   if (!hasDatabaseUrl()) {
     return buildFallbackRecord();
   }
 
   try {
     const latestScenario = await prisma.pricingScenario.findFirst({
+      where: { product: { orgId } },
       orderBy: { createdAt: "desc" },
       include: {
         product: true,
@@ -157,7 +159,7 @@ export async function getDashboardData() {
   }
 }
 
-export async function getProductsData() {
+export async function getProductsData(orgId: string) {
   if (!hasDatabaseUrl()) {
     const fallback = buildFallbackRecord();
 
@@ -177,6 +179,7 @@ export async function getProductsData() {
 
   try {
     const products = await prisma.product.findMany({
+      where: { orgId },
       orderBy: { updatedAt: "desc" },
       include: {
         scenarios: {
@@ -218,7 +221,7 @@ export async function getProductsData() {
   }
 }
 
-export async function getScenariosData() {
+export async function getScenariosData(orgId: string) {
   if (!hasDatabaseUrl()) {
     const result = calculatePricing(samplePricingInput);
 
@@ -241,6 +244,7 @@ export async function getScenariosData() {
 
   try {
     const scenarios = await prisma.pricingScenario.findMany({
+      where: { product: { orgId } },
       orderBy: { createdAt: "desc" },
       include: {
         product: true,
@@ -343,17 +347,26 @@ export async function getRatesData() {
   }
 }
 
-export async function savePricingScenario(input: PricingInput) {
+export async function savePricingScenario(params: {
+  orgId: string;
+  userId: string;
+  ipAddress?: string | null;
+  input: PricingInput;
+}) {
   if (!hasDatabaseUrl()) {
     throw new Error("DATABASE_URL nao configurada.");
   }
 
+  const { orgId, userId, ipAddress, input } = params;
   const result = calculatePricing(input);
 
-  return prisma.$transaction(async (tx) => {
+  const tx = await prisma.$transaction(async (tx) => {
     const product = await tx.product.upsert({
       where: {
-        sku: input.product.sku,
+        orgId_sku: {
+          orgId,
+          sku: input.product.sku,
+        },
       },
       update: {
         name: input.product.name,
@@ -364,6 +377,7 @@ export async function savePricingScenario(input: PricingInput) {
         active: true,
       },
       create: {
+        orgId,
         name: input.product.name,
         sku: input.product.sku,
         weightKg: input.product.weightKg,
@@ -432,19 +446,6 @@ export async function savePricingScenario(input: PricingInput) {
       },
     });
 
-    await tx.auditLog.create({
-      data: {
-        entity: "PricingScenario",
-        entityId: scenario.id,
-        action: "create",
-        afterJson: {
-          scenarioId: scenario.id,
-          resultId: savedResult.id,
-          productId: product.id,
-        },
-      },
-    });
-
     return {
       productId: product.id,
       scenarioId: scenario.id,
@@ -452,4 +453,16 @@ export async function savePricingScenario(input: PricingInput) {
       result,
     };
   });
+
+  await writeAudit({
+    orgId,
+    userId,
+    ipAddress,
+    entity: "PricingScenario",
+    entityId: tx.scenarioId,
+    action: "create",
+    after: { scenarioId: tx.scenarioId, resultId: tx.resultId, productId: tx.productId },
+  });
+
+  return tx;
 }

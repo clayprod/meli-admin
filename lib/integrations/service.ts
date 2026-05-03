@@ -14,13 +14,17 @@ import {
   getMercadoLivreItemPromotions,
   getMercadoLivreItems,
   getMercadoLivreUserProfile,
+  getMercadoLivreItem,
   refreshMercadoLivreToken,
   searchMercadoLivreItemIds,
+  updateMercadoLivreItem,
 } from "@/lib/integrations/mercadolivre";
+import { writeAudit } from "@/lib/auth/audit";
 import {
   exchangeMercadoPagoCode,
+  getMercadoPagoPayment,
   refreshMercadoPagoToken,
-  searchMercadoPagoPayments,
+  searchAllMercadoPagoPayments,
 } from "@/lib/integrations/mercadopago";
 
 function mapTokenExpiry(expiresIn?: number) {
@@ -40,6 +44,7 @@ function resolveConnectionLabel(provider: IntegrationProvider, profile: Record<s
 }
 
 async function upsertConnection(params: {
+  orgId: string;
   provider: IntegrationProvider;
   externalUserId: string;
   accountLabel: string;
@@ -53,7 +58,8 @@ async function upsertConnection(params: {
 }) {
   return db.integrationConnection.upsert({
     where: {
-      provider_externalUserId: {
+      orgId_provider_externalUserId: {
+        orgId: params.orgId,
         provider: params.provider,
         externalUserId: params.externalUserId,
       },
@@ -71,6 +77,7 @@ async function upsertConnection(params: {
       lastSyncError: null,
     },
     create: {
+      orgId: params.orgId,
       provider: params.provider,
       externalUserId: params.externalUserId,
       accountLabel: params.accountLabel,
@@ -107,7 +114,7 @@ async function markSyncSuccess(connectionId: string) {
   });
 }
 
-export async function connectMercadoLivreAccount(code: string) {
+export async function connectMercadoLivreAccount(orgId: string, code: string) {
   const token = await exchangeMercadoLivreCode(code);
   const profile = await getMercadoLivreUserProfile(token.access_token);
   const externalUserId = String(token.user_id ?? profile.id ?? profile.user_id);
@@ -117,6 +124,7 @@ export async function connectMercadoLivreAccount(code: string) {
   }
 
   return upsertConnection({
+    orgId,
     provider: IntegrationProvider.MERCADO_LIVRE,
     externalUserId,
     accountLabel: resolveConnectionLabel(IntegrationProvider.MERCADO_LIVRE, profile, externalUserId),
@@ -130,7 +138,7 @@ export async function connectMercadoLivreAccount(code: string) {
   });
 }
 
-export async function connectMercadoPagoAccount(code: string) {
+export async function connectMercadoPagoAccount(orgId: string, code: string) {
   const token = await exchangeMercadoPagoCode(code);
   const externalUserId = String(token.user_id ?? `collector-${Date.now()}`);
   const metadata = {
@@ -138,6 +146,7 @@ export async function connectMercadoPagoAccount(code: string) {
   };
 
   return upsertConnection({
+    orgId,
     provider: IntegrationProvider.MERCADO_PAGO,
     externalUserId,
     accountLabel: resolveConnectionLabel(IntegrationProvider.MERCADO_PAGO, metadata, externalUserId),
@@ -150,7 +159,7 @@ export async function connectMercadoPagoAccount(code: string) {
   });
 }
 
-async function ensureDirectMercadoPagoConnection() {
+async function ensureDirectMercadoPagoConnection(orgId: string) {
   const config = getMercadoPagoConfig();
 
   if (!config.accessToken) {
@@ -158,6 +167,7 @@ async function ensureDirectMercadoPagoConnection() {
   }
 
   return upsertConnection({
+    orgId,
     provider: IntegrationProvider.MERCADO_PAGO,
     externalUserId: "env-direct",
     accountLabel: "Mercado Pago direto (token)",
@@ -173,9 +183,10 @@ async function ensureDirectMercadoPagoConnection() {
   });
 }
 
-export async function getPrimaryConnection(provider: IntegrationProvider) {
+export async function getPrimaryConnection(orgId: string, provider: IntegrationProvider) {
   return db.integrationConnection.findFirst({
     where: {
+      orgId,
       provider,
       status: {
         not: ConnectionStatus.DISCONNECTED,
@@ -247,8 +258,72 @@ function stringifyJson(input: unknown) {
   return input && typeof input === "object" ? (input as Prisma.InputJsonValue) : Prisma.JsonNull;
 }
 
-export async function syncMercadoLivreListings() {
-  const connection = await getPrimaryConnection(IntegrationProvider.MERCADO_LIVRE);
+function buildListingUpsert(item: Record<string, unknown>, connection: IntegrationConnection) {
+  const itemId = String(item.id ?? "");
+  const shipping = item.shipping && typeof item.shipping === "object" ? (item.shipping as Record<string, unknown>) : null;
+
+  return {
+    itemId,
+    data: {
+      siteId: String(item.site_id ?? connection.siteId ?? "MLB"),
+      sellerId: String(item.seller_id ?? connection.externalUserId),
+      title: String(item.title ?? "Sem titulo"),
+      status: String(item.status ?? "active"),
+      condition: item.condition ? String(item.condition) : null,
+      domainId: item.domain_id ? String(item.domain_id) : null,
+      categoryId: item.category_id ? String(item.category_id) : null,
+      currencyId: item.currency_id ? String(item.currency_id) : null,
+      listingTypeId: item.listing_type_id ? String(item.listing_type_id) : null,
+      logisticType: shipping?.logistic_type ? String(shipping.logistic_type) : null,
+      officialStoreId: item.official_store_id ? String(item.official_store_id) : null,
+      catalogListing: Boolean(item.catalog_listing),
+      acceptsMercadoPago: item.accepts_mercadopago !== false,
+      price: parseNumber(item.price) ?? 0,
+      originalPrice: parseNumber(item.original_price),
+      availableQuantity: parseIntOrNull(item.available_quantity),
+      soldQuantity: parseIntOrNull(item.sold_quantity),
+      thumbnail: item.thumbnail ? String(item.thumbnail) : null,
+      permalink: item.permalink ? String(item.permalink) : null,
+      videoId: item.video_id ? String(item.video_id) : null,
+      picturesJson: stringifyJson(item.pictures),
+      attributesJson: stringifyJson(item.attributes),
+      shippingJson: stringifyJson(item.shipping),
+      variationsJson: stringifyJson(item.variations),
+      tagsJson: stringifyJson(item.tags),
+      rawJson: stringifyJson(item),
+      lastSyncedAt: new Date(),
+    },
+  };
+}
+
+async function upsertListingFromItem(
+  client: Prisma.TransactionClient | typeof db,
+  item: Record<string, unknown>,
+  connection: IntegrationConnection,
+) {
+  const { itemId, data } = buildListingUpsert(item, connection);
+  if (!itemId) return null;
+
+  return client.marketplaceListing.upsert({
+    where: { itemId },
+    update: data,
+    create: { ...data, connectionId: connection.id, itemId },
+  });
+}
+
+export async function syncSingleMercadoLivreListing(orgId: string, itemId: string) {
+  const connection = await getPrimaryConnection(orgId, IntegrationProvider.MERCADO_LIVRE);
+  if (!connection) {
+    throw new Error("Conexao Mercado Livre nao encontrada para esta organizacao.");
+  }
+
+  const accessToken = await getValidAccessToken(connection);
+  const item = await getMercadoLivreItem(accessToken, itemId);
+  return upsertListingFromItem(db, item, connection);
+}
+
+export async function syncMercadoLivreListings(orgId: string) {
+  const connection = await getPrimaryConnection(orgId, IntegrationProvider.MERCADO_LIVRE);
 
   if (!connection) {
     throw new Error("Conecte uma conta do Mercado Livre antes de sincronizar.");
@@ -257,89 +332,14 @@ export async function syncMercadoLivreListings() {
   try {
     const accessToken = await getValidAccessToken(connection);
     const itemIds = await searchMercadoLivreItemIds(accessToken, connection.externalUserId);
-    const items = await getMercadoLivreItems(accessToken, itemIds.slice(0, 50));
+    const items = await getMercadoLivreItems(accessToken, itemIds);
 
     const result = await db.$transaction(async (tx) => {
       let synced = 0;
-
       for (const item of items) {
-        const itemId = String(item.id ?? "");
-        if (!itemId) {
-          continue;
-        }
-
-        await tx.marketplaceListing.upsert({
-          where: { itemId },
-          update: {
-            siteId: String(item.site_id ?? connection.siteId ?? "MLB"),
-            sellerId: String(item.seller_id ?? connection.externalUserId),
-            title: String(item.title ?? "Sem titulo"),
-            status: String(item.status ?? "active"),
-            condition: item.condition ? String(item.condition) : null,
-            domainId: item.domain_id ? String(item.domain_id) : null,
-            categoryId: item.category_id ? String(item.category_id) : null,
-            currencyId: item.currency_id ? String(item.currency_id) : null,
-            listingTypeId: item.listing_type_id ? String(item.listing_type_id) : null,
-            logisticType:
-              item.shipping && typeof item.shipping === "object" && "logistic_type" in item.shipping
-                ? String((item.shipping as Record<string, unknown>).logistic_type ?? "") || null
-                : null,
-            officialStoreId: item.official_store_id ? String(item.official_store_id) : null,
-            catalogListing: Boolean(item.catalog_listing),
-            acceptsMercadoPago: item.accepts_mercadopago !== false,
-            price: parseNumber(item.price) ?? 0,
-            originalPrice: parseNumber(item.original_price),
-            availableQuantity: parseIntOrNull(item.available_quantity),
-            soldQuantity: parseIntOrNull(item.sold_quantity),
-            thumbnail: item.thumbnail ? String(item.thumbnail) : null,
-            permalink: item.permalink ? String(item.permalink) : null,
-            videoId: item.video_id ? String(item.video_id) : null,
-            picturesJson: stringifyJson(item.pictures),
-            attributesJson: stringifyJson(item.attributes),
-            shippingJson: stringifyJson(item.shipping),
-            variationsJson: stringifyJson(item.variations),
-            tagsJson: stringifyJson(item.tags),
-            rawJson: stringifyJson(item),
-            lastSyncedAt: new Date(),
-          },
-          create: {
-            connectionId: connection.id,
-            itemId,
-            siteId: String(item.site_id ?? connection.siteId ?? "MLB"),
-            sellerId: String(item.seller_id ?? connection.externalUserId),
-            title: String(item.title ?? "Sem titulo"),
-            status: String(item.status ?? "active"),
-            condition: item.condition ? String(item.condition) : null,
-            domainId: item.domain_id ? String(item.domain_id) : null,
-            categoryId: item.category_id ? String(item.category_id) : null,
-            currencyId: item.currency_id ? String(item.currency_id) : null,
-            listingTypeId: item.listing_type_id ? String(item.listing_type_id) : null,
-            logisticType:
-              item.shipping && typeof item.shipping === "object" && "logistic_type" in item.shipping
-                ? String((item.shipping as Record<string, unknown>).logistic_type ?? "") || null
-                : null,
-            officialStoreId: item.official_store_id ? String(item.official_store_id) : null,
-            catalogListing: Boolean(item.catalog_listing),
-            acceptsMercadoPago: item.accepts_mercadopago !== false,
-            price: parseNumber(item.price) ?? 0,
-            originalPrice: parseNumber(item.original_price),
-            availableQuantity: parseIntOrNull(item.available_quantity),
-            soldQuantity: parseIntOrNull(item.sold_quantity),
-            thumbnail: item.thumbnail ? String(item.thumbnail) : null,
-            permalink: item.permalink ? String(item.permalink) : null,
-            videoId: item.video_id ? String(item.video_id) : null,
-            picturesJson: stringifyJson(item.pictures),
-            attributesJson: stringifyJson(item.attributes),
-            shippingJson: stringifyJson(item.shipping),
-            variationsJson: stringifyJson(item.variations),
-            tagsJson: stringifyJson(item.tags),
-            rawJson: stringifyJson(item),
-            lastSyncedAt: new Date(),
-          },
-        });
-        synced += 1;
+        const upserted = await upsertListingFromItem(tx, item, connection);
+        if (upserted) synced += 1;
       }
-
       return synced;
     });
 
@@ -351,8 +351,8 @@ export async function syncMercadoLivreListings() {
   }
 }
 
-export async function syncMercadoLivrePromotions() {
-  const connection = await getPrimaryConnection(IntegrationProvider.MERCADO_LIVRE);
+export async function syncMercadoLivrePromotions(orgId: string) {
+  const connection = await getPrimaryConnection(orgId, IntegrationProvider.MERCADO_LIVRE);
 
   if (!connection) {
     throw new Error("Conecte uma conta do Mercado Livre antes de sincronizar promocoes.");
@@ -363,7 +363,6 @@ export async function syncMercadoLivrePromotions() {
     const listings = await db.marketplaceListing.findMany({
       where: { connectionId: connection.id },
       select: { id: true, itemId: true },
-      take: 50,
     });
 
     let synced = 0;
@@ -438,8 +437,8 @@ export async function syncMercadoLivrePromotions() {
   }
 }
 
-export async function syncMercadoLivreAds(days = 14) {
-  const connection = await getPrimaryConnection(IntegrationProvider.MERCADO_LIVRE);
+export async function syncMercadoLivreAds(orgId: string, days = 14) {
+  const connection = await getPrimaryConnection(orgId, IntegrationProvider.MERCADO_LIVRE);
 
   if (!connection) {
     throw new Error("Conecte uma conta do Mercado Livre antes de sincronizar ads.");
@@ -454,7 +453,6 @@ export async function syncMercadoLivreAds(days = 14) {
     const listings = await db.marketplaceListing.findMany({
       where: { connectionId: connection.id },
       select: { id: true, itemId: true },
-      take: 30,
     });
     const dateTo = new Date();
     const dateFrom = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
@@ -560,10 +558,98 @@ function inferListingLink(externalReference: string | null, itemLookup: Map<stri
   return null;
 }
 
-export async function syncMercadoPagoPayments(days = 30) {
+function buildPaymentUpsert(
+  payment: Record<string, unknown>,
+  connection: IntegrationConnection,
+  linkedListing: { id: string; productId: string | null } | null,
+) {
+  const paymentId = String(payment.id ?? "");
+  const externalReference = payment.external_reference ? String(payment.external_reference) : null;
+  const feeDetails = Array.isArray(payment.fee_details)
+    ? (payment.fee_details as Array<Record<string, unknown>>)
+    : [];
+  const marketplaceFeeAmount = feeDetails
+    .filter((fee) => String(fee.type ?? "").includes("application"))
+    .reduce((total, fee) => total + (parseNumber(fee.amount) ?? 0), 0);
+  const mercadopagoFeeAmount = feeDetails
+    .filter((fee) => !String(fee.type ?? "").includes("application"))
+    .reduce((total, fee) => total + (parseNumber(fee.amount) ?? 0), 0);
+  const orderId =
+    payment.order && typeof payment.order === "object" && "id" in payment.order
+      ? String((payment.order as Record<string, unknown>).id ?? "") || null
+      : null;
+  const transactionDetails =
+    payment.transaction_details && typeof payment.transaction_details === "object"
+      ? (payment.transaction_details as Record<string, unknown>)
+      : null;
+
+  return {
+    paymentId,
+    data: {
+      listingId: linkedListing?.id ?? null,
+      productId: linkedListing?.productId ?? null,
+      externalReference,
+      merchantOrderId: orderId,
+      marketplaceOrderId: payment.marketplace ? String(payment.marketplace) : null,
+      status: String(payment.status ?? "unknown"),
+      statusDetail: payment.status_detail ? String(payment.status_detail) : null,
+      paymentMethodId: payment.payment_method_id ? String(payment.payment_method_id) : null,
+      paymentTypeId: payment.payment_type_id ? String(payment.payment_type_id) : null,
+      currencyId: payment.currency_id ? String(payment.currency_id) : null,
+      transactionAmount: parseNumber(payment.transaction_amount) ?? 0,
+      totalPaidAmount: parseNumber(payment.total_paid_amount),
+      netReceivedAmount:
+        parseNumber(payment.net_received_amount) ??
+        parseNumber(transactionDetails?.net_received_amount),
+      shippingAmount: parseNumber(payment.shipping_amount),
+      marketplaceFeeAmount: marketplaceFeeAmount || null,
+      mercadopagoFeeAmount: mercadopagoFeeAmount || null,
+      approvedAt: payment.date_approved ? parseDate(payment.date_approved) : null,
+      paymentCreatedAt: payment.date_created ? parseDate(payment.date_created) : null,
+      paymentUpdatedAt: payment.date_last_updated ? parseDate(payment.date_last_updated) : null,
+      rawJson: stringifyJson(payment),
+    },
+  };
+}
+
+async function getListingLookup(orgId: string) {
+  const listings = await db.marketplaceListing.findMany({
+    where: { connection: { orgId } },
+    select: { id: true, itemId: true, productId: true },
+  });
+  return new Map(listings.map((l) => [l.itemId, { id: l.id, productId: l.productId }]));
+}
+
+export async function syncSingleMercadoPagoPayment(orgId: string, paymentId: string) {
   const connection =
-    (await ensureDirectMercadoPagoConnection()) ??
-    (await getPrimaryConnection(IntegrationProvider.MERCADO_PAGO));
+    (await ensureDirectMercadoPagoConnection(orgId)) ??
+    (await getPrimaryConnection(orgId, IntegrationProvider.MERCADO_PAGO));
+
+  if (!connection) {
+    throw new Error("Conexao Mercado Pago nao encontrada para esta organizacao.");
+  }
+
+  const accessToken = await getValidAccessToken(connection);
+  const payment = await getMercadoPagoPayment(accessToken, paymentId);
+  const itemLookup = await getListingLookup(orgId);
+  const linkedListing = inferListingLink(
+    payment.external_reference ? String(payment.external_reference) : null,
+    itemLookup,
+  );
+  const { paymentId: pid, data } = buildPaymentUpsert(payment, connection, linkedListing);
+  if (!pid) return null;
+
+  return db.financialPayment.upsert({
+    where: { paymentId: pid },
+    update: data,
+    create: { ...data, connectionId: connection.id, paymentId: pid },
+  });
+}
+
+export async function syncMercadoPagoPayments(orgId: string, days = 30) {
+  const connection =
+    (await ensureDirectMercadoPagoConnection(orgId)) ??
+    (await getPrimaryConnection(orgId, IntegrationProvider.MERCADO_PAGO));
 
   if (!connection) {
     throw new Error("Configure um access token ou conecte uma conta do Mercado Pago antes de sincronizar pagamentos.");
@@ -573,102 +659,28 @@ export async function syncMercadoPagoPayments(days = 30) {
     const accessToken = await getValidAccessToken(connection);
     const endDate = new Date();
     const beginDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-    const response = await searchMercadoPagoPayments(accessToken, {
+    const payments = await searchAllMercadoPagoPayments(accessToken, {
       beginDate: beginDate.toISOString(),
       endDate: endDate.toISOString(),
-      limit: 100,
     });
     const listings = await db.marketplaceListing.findMany({
+      where: { connection: { orgId } },
       select: { id: true, itemId: true, productId: true },
     });
     const itemLookup = new Map(listings.map((listing) => [listing.itemId, { id: listing.id, productId: listing.productId }]));
 
     let synced = 0;
 
-    for (const payment of response.results ?? []) {
-      const paymentId = String(payment.id ?? "");
-      if (!paymentId) {
-        continue;
-      }
-
+    for (const payment of payments) {
       const externalReference = payment.external_reference ? String(payment.external_reference) : null;
       const linkedListing = inferListingLink(externalReference, itemLookup);
-      const feeDetails = Array.isArray(payment.fee_details)
-        ? payment.fee_details as Array<Record<string, unknown>>
-        : [];
-      const marketplaceFeeAmount = feeDetails
-        .filter((fee) => String(fee.type ?? "").includes("application"))
-        .reduce((total, fee) => total + (parseNumber(fee.amount) ?? 0), 0);
-      const mercadopagoFeeAmount = feeDetails
-        .filter((fee) => !String(fee.type ?? "").includes("application"))
-        .reduce((total, fee) => total + (parseNumber(fee.amount) ?? 0), 0);
+      const { paymentId, data } = buildPaymentUpsert(payment, connection, linkedListing);
+      if (!paymentId) continue;
 
       await db.financialPayment.upsert({
         where: { paymentId },
-        update: {
-          listingId: linkedListing?.id ?? null,
-          productId: linkedListing?.productId ?? null,
-          externalReference,
-          merchantOrderId:
-            payment.order && typeof payment.order === "object" && "id" in payment.order
-              ? String((payment.order as Record<string, unknown>).id ?? "") || null
-              : null,
-          marketplaceOrderId: payment.marketplace ? String(payment.marketplace) : null,
-          status: String(payment.status ?? "unknown"),
-          statusDetail: payment.status_detail ? String(payment.status_detail) : null,
-          paymentMethodId: payment.payment_method_id ? String(payment.payment_method_id) : null,
-          paymentTypeId: payment.payment_type_id ? String(payment.payment_type_id) : null,
-          currencyId: payment.currency_id ? String(payment.currency_id) : null,
-          transactionAmount: parseNumber(payment.transaction_amount) ?? 0,
-          totalPaidAmount: parseNumber(payment.total_paid_amount),
-          netReceivedAmount:
-            parseNumber(payment.net_received_amount) ??
-            parseNumber(
-              payment.transaction_details && typeof payment.transaction_details === "object"
-                ? (payment.transaction_details as Record<string, unknown>).net_received_amount
-                : null,
-            ),
-          shippingAmount: parseNumber(payment.shipping_amount),
-          marketplaceFeeAmount: marketplaceFeeAmount || null,
-          mercadopagoFeeAmount: mercadopagoFeeAmount || null,
-          approvedAt: payment.date_approved ? parseDate(payment.date_approved) : null,
-          paymentCreatedAt: payment.date_created ? parseDate(payment.date_created) : null,
-          paymentUpdatedAt: payment.date_last_updated ? parseDate(payment.date_last_updated) : null,
-          rawJson: stringifyJson(payment),
-        },
-        create: {
-          connectionId: connection.id,
-          listingId: linkedListing?.id ?? null,
-          productId: linkedListing?.productId ?? null,
-          paymentId,
-          externalReference,
-          merchantOrderId:
-            payment.order && typeof payment.order === "object" && "id" in payment.order
-              ? String((payment.order as Record<string, unknown>).id ?? "") || null
-              : null,
-          marketplaceOrderId: payment.marketplace ? String(payment.marketplace) : null,
-          status: String(payment.status ?? "unknown"),
-          statusDetail: payment.status_detail ? String(payment.status_detail) : null,
-          paymentMethodId: payment.payment_method_id ? String(payment.payment_method_id) : null,
-          paymentTypeId: payment.payment_type_id ? String(payment.payment_type_id) : null,
-          currencyId: payment.currency_id ? String(payment.currency_id) : null,
-          transactionAmount: parseNumber(payment.transaction_amount) ?? 0,
-          totalPaidAmount: parseNumber(payment.total_paid_amount),
-          netReceivedAmount:
-            parseNumber(payment.net_received_amount) ??
-            parseNumber(
-              payment.transaction_details && typeof payment.transaction_details === "object"
-                ? (payment.transaction_details as Record<string, unknown>).net_received_amount
-                : null,
-            ),
-          shippingAmount: parseNumber(payment.shipping_amount),
-          marketplaceFeeAmount: marketplaceFeeAmount || null,
-          mercadopagoFeeAmount: mercadopagoFeeAmount || null,
-          approvedAt: payment.date_approved ? parseDate(payment.date_approved) : null,
-          paymentCreatedAt: payment.date_created ? parseDate(payment.date_created) : null,
-          paymentUpdatedAt: payment.date_last_updated ? parseDate(payment.date_last_updated) : null,
-          rawJson: stringifyJson(payment),
-        },
+        update: data,
+        create: { ...data, connectionId: connection.id, paymentId },
       });
       synced += 1;
     }
@@ -679,6 +691,102 @@ export async function syncMercadoPagoPayments(days = 30) {
     await markSyncError(connection.id, error);
     throw error;
   }
+}
+
+type ListingUpdatePayload = {
+  price?: number;
+  availableQuantity?: number;
+  status?: "active" | "paused" | "closed";
+};
+
+export async function updateMercadoLivreListing(params: {
+  orgId: string;
+  userId: string;
+  ipAddress?: string | null;
+  listingId: string;
+  changes: ListingUpdatePayload;
+}) {
+  const { orgId, userId, ipAddress, listingId, changes } = params;
+
+  const listing = await db.marketplaceListing.findFirst({
+    where: { id: listingId, connection: { orgId } },
+    include: { connection: true },
+  });
+
+  if (!listing) {
+    throw new Error("Anuncio nao encontrado nesta organizacao.");
+  }
+
+  if (listing.connection.provider !== IntegrationProvider.MERCADO_LIVRE) {
+    throw new Error("O anuncio nao pertence a uma conexao do Mercado Livre.");
+  }
+
+  const before = {
+    price: listing.price,
+    availableQuantity: listing.availableQuantity,
+    status: listing.status,
+  };
+
+  const payload: Record<string, unknown> = {};
+  if (typeof changes.price === "number" && Number.isFinite(changes.price) && changes.price > 0) {
+    payload.price = changes.price;
+  }
+  if (
+    typeof changes.availableQuantity === "number" &&
+    Number.isFinite(changes.availableQuantity) &&
+    changes.availableQuantity >= 0
+  ) {
+    payload.available_quantity = Math.trunc(changes.availableQuantity);
+  }
+  if (changes.status && ["active", "paused", "closed"].includes(changes.status)) {
+    payload.status = changes.status;
+  }
+
+  if (Object.keys(payload).length === 0) {
+    throw new Error("Nenhuma alteracao informada.");
+  }
+
+  const accessToken = await getValidAccessToken(listing.connection);
+  const response = await updateMercadoLivreItem(
+    accessToken,
+    listing.itemId,
+    payload as { price?: number; available_quantity?: number; status?: "active" | "paused" | "closed" },
+  );
+
+  const after = {
+    price: typeof response.price === "number" ? response.price : changes.price ?? listing.price,
+    availableQuantity:
+      typeof response.available_quantity === "number"
+        ? response.available_quantity
+        : changes.availableQuantity ?? listing.availableQuantity,
+    status:
+      typeof response.status === "string"
+        ? (response.status as string)
+        : changes.status ?? listing.status,
+  };
+
+  const updated = await db.marketplaceListing.update({
+    where: { id: listing.id },
+    data: {
+      price: after.price ?? listing.price,
+      availableQuantity: after.availableQuantity ?? listing.availableQuantity,
+      status: after.status ?? listing.status,
+      lastSyncedAt: new Date(),
+    },
+  });
+
+  await writeAudit({
+    orgId,
+    userId,
+    ipAddress,
+    entity: "MarketplaceListing",
+    entityId: listing.id,
+    action: "ml-update-item",
+    before,
+    after,
+  });
+
+  return updated;
 }
 
 export async function recordIntegrationWebhook(params: {
@@ -697,6 +805,14 @@ export async function recordIntegrationWebhook(params: {
         },
       })
     : null;
+
+  if (params.externalEventId) {
+    const existing = await db.integrationWebhookEvent.findFirst({
+      where: { externalEventId: params.externalEventId, provider: params.provider },
+      select: { id: true },
+    });
+    if (existing) return existing;
+  }
 
   return db.integrationWebhookEvent.create({
     data: {

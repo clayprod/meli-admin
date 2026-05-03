@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -45,14 +46,29 @@ export default function LoginPage() {
         <div className="w-full max-w-sm">
           <div className="rounded-[32px] border border-white/70 bg-white/80 px-8 py-10 shadow-[0_28px_80px_-35px_rgba(2,6,23,0.25)] backdrop-blur">
             <div className="mb-8 text-center">
-              <div className="mb-4 inline-flex size-12 items-center justify-center rounded-2xl bg-slate-950 text-white shadow-lg">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                  <path d="M2 17l10 5 10-5" />
-                  <path d="M2 12l10 5 10-5" />
-                </svg>
+              <div className="mb-4 flex items-center justify-center gap-3">
+                <Image
+                  src="/tenryu_horizontal.png"
+                  alt="Tenryu"
+                  width={1413}
+                  height={423}
+                  priority
+                  unoptimized
+                  className="h-9 w-auto"
+                />
+                <span className="text-2xl font-light text-slate-300" aria-hidden="true">
+                  |
+                </span>
+                <Image
+                  src="/Logotipo_MercadoLivre.png"
+                  alt="Mercado Livre"
+                  width={500}
+                  height={126}
+                  priority
+                  unoptimized
+                  className="h-7 w-auto"
+                />
               </div>
-              <h1 className="text-2xl font-semibold tracking-tight text-slate-950">Meli Admin</h1>
               <p className="mt-1 text-sm text-slate-500">Entre com suas credenciais para continuar</p>
             </div>
 

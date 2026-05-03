@@ -1,19 +1,22 @@
 import { AppShell } from "@/components/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { requireSessionForPage } from "@/lib/auth/session";
 import { getPromotionsOverview } from "@/lib/db/integration-queries";
 import { formatCurrency } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
 export default async function PromotionsPage() {
-  const overview = await getPromotionsOverview();
+  const session = await requireSessionForPage();
+  const overview = await getPromotionsOverview(session.orgId);
 
   return (
     <AppShell
       currentPath="/promotions"
       title="Promocoes e ofertas"
       description="Visualize campanhas do seller, cupons, ofertas do dia e outras promocoes reais ligadas aos itens sincronizados."
+      userEmail={session.email}
     >
       <Card>
         <CardHeader>

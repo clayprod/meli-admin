@@ -1,18 +1,21 @@
 import { AppShell } from "@/components/app-shell";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { requireSessionForPage } from "@/lib/auth/session";
 import { getAdvertisingOverview } from "@/lib/db/integration-queries";
 import { formatCurrency, formatNumber } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdvertisingPage() {
-  const overview = await getAdvertisingOverview();
+  const session = await requireSessionForPage();
+  const overview = await getAdvertisingOverview(session.orgId);
 
   return (
     <AppShell
       currentPath="/advertising"
       title="Publicidade e Product Ads"
       description="Acompanhe cliques, impressoes, gasto, ACOS, ROAS e vendas atribuidas por listing real."
+      userEmail={session.email}
     >
       <div className="grid gap-6">
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

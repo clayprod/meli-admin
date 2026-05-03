@@ -19,11 +19,68 @@ enum ConnectionStatus {
   DISCONNECTED
 }
 
+enum UserRole {
+  OWNER
+  ADMIN
+  OPERATOR
+  VIEWER
+}
+
+enum TaxRegime {
+  SIMPLES_NACIONAL
+  LUCRO_PRESUMIDO
+  LUCRO_REAL
+  MEI
+}
+
+model Org {
+  id                  String                  @id @default(cuid())
+  name                String
+  slug                String                  @unique
+  taxRegime           TaxRegime               @default(SIMPLES_NACIONAL)
+  simplesAnexo        String?
+  rbt12               Float?
+  effectiveTaxRate    Float?
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+  users               User[]
+  products            Product[]
+  integrations        IntegrationConnection[]
+  auditLogs           AuditLog[]
+}
+
+model User {
+  id            String    @id @default(cuid())
+  orgId         String
+  email         String    @unique
+  name          String?
+  passwordHash  String
+  role          UserRole  @default(OWNER)
+  active        Boolean   @default(true)
+  lastLoginAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  org           Org       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+}
+
+model LoginAttempt {
+  id          String   @id @default(cuid())
+  email       String
+  ipAddress   String?
+  success     Boolean
+  attemptedAt DateTime @default(now())
+
+  @@index([email, attemptedAt])
+  @@index([ipAddress, attemptedAt])
+}
+
 model Product {
   id               String              @id @default(cuid())
-  orgId            String?
+  orgId            String
   name             String
-  sku              String?             @unique
+  sku              String?
   weightKg         Float
   lengthCm         Float
   widthCm          Float
@@ -31,10 +88,14 @@ model Product {
   active           Boolean             @default(true)
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
+  org              Org                 @relation(fields: [orgId], references: [id], onDelete: Cascade)
   batches          PurchaseBatch[]
   scenarios        PricingScenario[]
   marketplaceLinks MarketplaceListing[]
   payments         FinancialPayment[]
+
+  @@unique([orgId, sku])
+  @@index([orgId])
 }
 
 model PurchaseBatch {
@@ -97,6 +158,7 @@ model PricingResult {
 
 model IntegrationConnection {
   id                String              @id @default(cuid())
+  orgId             String
   provider          IntegrationProvider
   status            ConnectionStatus    @default(ACTIVE)
   accountLabel      String
@@ -115,13 +177,15 @@ model IntegrationConnection {
   lastSyncError     String?
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
+  org               Org                 @relation(fields: [orgId], references: [id], onDelete: Cascade)
   listings          MarketplaceListing[]
   promotions        ListingPromotion[]
   adMetrics         ListingAdMetric[]
   payments          FinancialPayment[]
   webhookEvents     IntegrationWebhookEvent[]
 
-  @@unique([provider, externalUserId])
+  @@unique([orgId, provider, externalUserId])
+  @@index([orgId])
 }
 
 model MarketplaceListing {
@@ -311,11 +375,17 @@ model FullStorageRate {
 
 model AuditLog {
   id         String   @id @default(cuid())
+  orgId      String
   entity     String
   entityId   String
   action     String
   beforeJson Json?
   afterJson  Json?
   userId     String?
+  ipAddress  String?
   createdAt  DateTime @default(now())
+  org        Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, createdAt])
+  @@index([orgId, entity, entityId])
 }

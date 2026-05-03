@@ -4,10 +4,14 @@
   --background: #ffffff;
   --background-subtle: #f9fafb;
   --foreground: #0f172a;
-  --primary: #f97316;
-  --primary-strong: #ea6c0a;
+  --primary: #fe8330;
+  --primary-strong: #fe5f2f;
   --primary-fg: #ffffff;
-  --ring: #fdba74;
+  --ring: #ffcc33;
+  --success: #16a34a;
+  --success-fg: #ffffff;
+  --danger: #dc2626;
+  --danger-fg: #ffffff;
 }
 
 @theme inline {
@@ -15,6 +19,30 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-manrope);
   --font-mono: var(--font-plex-mono);
+
+  --color-orange-50: #fff8e8;
+  --color-orange-100: #ffefc2;
+  --color-orange-200: #ffe085;
+  --color-orange-300: #ffcc33;
+  --color-orange-400: #ffa832;
+  --color-orange-500: #fe8330;
+  --color-orange-600: #fe5f2f;
+  --color-orange-700: #fd3a2d;
+  --color-orange-800: #c32a20;
+  --color-orange-900: #8b1a14;
+  --color-orange-950: #4d0a07;
+
+  --color-green-50: #f0fdf4;
+  --color-green-100: #dcfce7;
+  --color-green-500: #22c55e;
+  --color-green-600: #16a34a;
+  --color-green-700: #15803d;
+
+  --color-red-50: #fef2f2;
+  --color-red-100: #fee2e2;
+  --color-red-500: #ef4444;
+  --color-red-600: #dc2626;
+  --color-red-700: #b91c1c;
 }
 
 * {
@@ -37,7 +65,7 @@ a {
 }
 
 ::selection {
-  background: rgba(249, 115, 22, 0.15);
+  background: rgba(254, 131, 48, 0.18);
 }
 
 .font-mono {
